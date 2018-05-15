@@ -11,10 +11,27 @@ import resampy
 import librosa
 import shutil
 import subprocess
+import Image
 
-# channel_first=config.channel_first
-# np.random.seed(1)#设定种子
-# random.seed(1)
+channel_first=config.channel_first
+np.random.seed(1)#设定种子
+random.seed(1)
+
+def extract_frames(video, dst):
+    with open('video_log', "w") as ffmpeg_log:
+        video_id = video.split("/")[-1].split(".")[0]
+        if os.path.exists(dst):
+            print " cleanup: " + dst + "/"
+            shutil.rmtree(dst)
+        os.makedirs(dst)
+        video_to_frames_command = ["ffmpeg",
+                                   '-y',  # (optional) overwrite output file if it exists
+                                   '-i', video,  # input file
+                                   '-vf', "scale={}:{}".format(config.VideoSize[0],config.VideoSize[1]),  # input file
+                                   '-r', str(config.VIDEO_RATE),  # samplling rate of the Video
+                                   '-qscale:v', "2",  # quality for JPEG
+                                   '{0}/%03d.jpg'.format(dst)]
+        subprocess.call(video_to_frames_command, stdout=ffmpeg_log, stderr=ffmpeg_log)
 
 def split_forTrainDevTest(spk_list,train_or_test):
     '''为了保证一个统一的训练和测试的划分标准，不得不用通用的一些方法来限定一下,
@@ -78,6 +95,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     query=[]#应该是BATCH_SIZE，shape(query)的形式，用list再转换把
     multi_spk_fea_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
     multi_spk_wav_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
+    multi_video_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
 
     #目标数据集的总data，底下应该存放分目录的文件夹，每个文件夹应该名字是sX
     data_path=config.aim_path+'/data'
@@ -186,6 +204,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
 
                 multi_fea_dict_this_sample={}
                 multi_wav_dict_this_sample={}
+                multi_video_dict_this_sample={}
                 multi_db_dict_this_sample={}
 
                 for k,spk in enumerate(aim_spk_k):
@@ -236,6 +255,32 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         multi_wav_dict_this_sample[spk]=signal
 
                         #视频处理部分，为了得到query
+                        aim_spk_video_path=data_path+'/'+train_or_test+'/'+spk+'/'+spk+'_video/'+sample_name+'.mpg'
+                        sample_name='video_output/'+sample_name
+                        extract_frames(aim_spk_video_path,sample_name) #抽取frames从第一个目标人的视频里,在本目录下生成一个临时的文件夹
+                        aim_video_imagename_list = sorted(os.listdir(sample_name)) #得到这个文件夹里的所有图像的名字
+                        aim_video_image_list=[]#用来存放这些抽出来帧的images的列表，后面转化为array
+                        for img in aim_video_imagename_list:
+                            im=Image.open(sample_name+'/'+img)
+                            pix=im.load()
+                            width,height=im.size
+                            #此处用来决定三个通道维度上的先后顺序是x,y,3还是3,x,y
+                            if not channel_first:
+                                im_array=np.zeros([width,height,3],dtype=np.float32)
+                                for x in range(width):
+                                    for y in range(height):
+                                        im_array[x,y]=pix[x,y]
+                            else:
+                                im_array=np.zeros([3,width,height],dtype=np.float32)
+                                for x in range(width):
+                                    for y in range(height):
+                                        im_array[:,x,y]=pix[x,y]
+                            aim_video_image_list.append(im_array)
+                        query.append(aim_video_image_list)#添加到最终的query里，作为batch里的一个sample
+                        multi_video_dict_this_sample[spk]=query
+
+                        # shutil.rmtree(sample_name)#删除临时文件夹
+
                     else:
                         ratio=10**(aim_spk_db_k[k]/20.0)
                         signal=ratio*signal
@@ -246,8 +291,38 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         multi_fea_dict_this_sample[spk]=some_fea_clean
                         multi_wav_dict_this_sample[spk]=signal
 
+
+                        #视频处理部分，为了得到query
+                        aim_spk_video_path=data_path+'/'+train_or_test+'/'+spk+'/'+spk+'_video/'+sample_name+'.mpg'
+                        dst='video_output/'+sample_name
+                        sample_name=dst
+                        extract_frames(aim_spk_video_path,dst) #抽取frames从第一个目标人的视频里,在本目录下生成一个临时的文件夹
+                        aim_video_imagename_list = sorted(os.listdir(dst)) #得到这个文件夹里的所有图像的名字
+                        aim_video_image_list=[]#用来存放这些抽出来帧的images的列表，后面转化为array
+                        for img in aim_video_imagename_list:
+                            im=Image.open(sample_name+'/'+img)
+                            pix=im.load()
+                            width,height=im.size
+                            #此处用来决定三个通道维度上的先后顺序是x,y,3还是3,x,y
+                            if not channel_first:
+                                im_array=np.zeros([width,height,3],dtype=np.float32)
+                                for x in range(width):
+                                    for y in range(height):
+                                        im_array[x,y]=pix[x,y]
+                            else:
+                                im_array=np.zeros([3,width,height],dtype=np.float32)
+                                for x in range(width):
+                                    for y in range(height):
+                                        im_array[:,x,y]=pix[x,y]
+                            aim_video_image_list.append(im_array)
+                        query.append(aim_video_image_list)#添加到最终的query里，作为batch里的一个sample
+                        multi_video_dict_this_sample[spk]=query
+
+                        # shutil.rmtree(sample_name)#删除临时文件夹
+
                 multi_spk_fea_list.append(multi_fea_dict_this_sample) #把这个sample的dict传进去
                 multi_spk_wav_list.append(multi_wav_dict_this_sample) #把这个sample的dict传进去
+                multi_video_list.append(multi_wav_dict_this_sample) #把这个sample的dict传进去
 
                 # 这里采用log 以后可以考虑采用MFCC或GFCC特征做为输入
                 if config.IS_LOG_SPECTRAL:
@@ -310,6 +385,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     query=[]#应该是BATCH_SIZE，shape(query)的形式，用list再转换把
                     multi_spk_fea_list=[]
                     multi_spk_wav_list=[]
+                    multi_video_list=[]
                 sample_idx[mix_k]+=1
 
         else:
