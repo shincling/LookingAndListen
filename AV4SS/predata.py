@@ -113,7 +113,13 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     aim_list_path=list_path+'mix_{}_spk_test.txt'.format(mix_k)
                 if not aim_list_path: #如果没有List就随机创建一个
                     create_mix_list(train_or_test,mix_k,data_path,all_spk_type,config.Num_samples_per_epoch)
-                    continue
+                    if  train_or_test=='train':
+                        aim_list_path=list_path+'mix_{}_spk_train.txt'.format(mix_k)
+                    if  train_or_test=='valid':
+                        aim_list_path=list_path+'mix_{}_spk_valid.txt'.format(mix_k)
+                    if train_or_test=='test':
+                        aim_list_path=list_path+'mix_{}_spk_test.txt'.format(mix_k)
+                    # continue
                 all_samples_list[mix_k]=open(aim_list_path).readlines()#[:31]
                 number_samples[mix_k]=len(all_samples_list[mix_k])
                 batch_mix[mix_k]=len(all_samples_list[mix_k])/config.BATCH_SIZE
@@ -173,9 +179,9 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     aim_spk_db_k=[0]*mix_k
 
                 else:
-                    aim_spk_k=re.findall('/([0-9][0-9].)/',all_samples_list[mix_k][sample_idx[mix_k]])
+                    aim_spk_k=re.findall('/(.{2,4})/.{6}\.wav ',all_samples_list[mix_k][sample_idx[mix_k]])
                     aim_spk_db_k=map(float,re.findall(' (.*?) ',all_samples_list[mix_k][sample_idx[mix_k]]))
-                    aim_spk_samplename_k=re.findall('/(.{8})\.wav ',all_samples_list[mix_k][sample_idx[mix_k]])
+                    aim_spk_samplename_k=re.findall('/(.{6})\.wav ',all_samples_list[mix_k][sample_idx[mix_k]])
                     assert len(aim_spk_k)==mix_k==len(aim_spk_db_k)==len(aim_spk_samplename_k)
 
                 multi_fea_dict_this_sample={}
@@ -186,9 +192,9 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     #选择dB的通道～！
                     sample_name=aim_spk_samplename_k[k]
                     if train_or_test!='test':
-                        spk_speech_path=data_path+'/'+'train'+'/'+spk+'/'+sample_name+'.wav'
+                        spk_speech_path=data_path+'/'+'train'+'/'+spk+'/'+spk+'_speech/'+sample_name+'.wav'
                     else:
-                        spk_speech_path=data_path+'/'+'eval_test'+'/'+spk+'/'+sample_name+'.wav'
+                        spk_speech_path=data_path+'/'+'eval_test'+'/'+spk+'/'+spk+'_speech/'+sample_name+'.wav'
 
                     signal, rate = sf.read(spk_speech_path)  # signal 是采样值，rate 是采样频率
                     if len(signal.shape) > 1:
@@ -324,6 +330,5 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
 
-print 'heer'
 ge=prepare_data('once','train')
 ge.next()
