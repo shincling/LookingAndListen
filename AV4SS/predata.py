@@ -276,10 +276,9 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                     for y in range(height):
                                         im_array[:,x,y]=pix[x,y]
                             aim_video_image_list.append(im_array)
-                        query.append(aim_video_image_list)#添加到最终的query里，作为batch里的一个sample
-                        multi_video_dict_this_sample[spk]=query
+                        multi_video_dict_this_sample[spk]=aim_video_image_list
 
-                        # shutil.rmtree(sample_name)#删除临时文件夹
+                        shutil.rmtree(sample_name)#删除临时文件夹
 
                     else:
                         ratio=10**(aim_spk_db_k[k]/20.0)
@@ -315,14 +314,13 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                     for y in range(height):
                                         im_array[:,x,y]=pix[x,y]
                             aim_video_image_list.append(im_array)
-                        query.append(aim_video_image_list)#添加到最终的query里，作为batch里的一个sample
-                        multi_video_dict_this_sample[spk]=query
+                        multi_video_dict_this_sample[spk]=aim_video_image_list
 
-                        # shutil.rmtree(sample_name)#删除临时文件夹
+                        shutil.rmtree(sample_name)#删除临时文件夹
 
                 multi_spk_fea_list.append(multi_fea_dict_this_sample) #把这个sample的dict传进去
                 multi_spk_wav_list.append(multi_wav_dict_this_sample) #把这个sample的dict传进去
-                multi_video_list.append(multi_wav_dict_this_sample) #把这个sample的dict传进去
+                multi_video_list.append(multi_video_dict_this_sample) #把这个sample的dict传进去
 
                 # 这里采用log 以后可以考虑采用MFCC或GFCC特征做为输入
                 if config.IS_LOG_SPECTRAL:
@@ -372,6 +370,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                'num_all_spk':len(all_spk),
                                'multi_spk_fea_list':multi_spk_fea_list,
                                'multi_spk_wav_list':multi_spk_wav_list,
+                               'multi_video_list':multi_video_list,
                                'batch_total':batch_total,
                                }
 
@@ -406,5 +405,5 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
 
-ge=prepare_data('once','train')
-ge.next()
+# ge=prepare_data('once','train')
+# ge.next()
