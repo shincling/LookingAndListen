@@ -12,9 +12,9 @@ import librosa
 import shutil
 import subprocess
 
-channel_first=config.channel_first
-np.random.seed(1)#设定种子
-random.seed(1)
+# channel_first=config.channel_first
+# np.random.seed(1)#设定种子
+# random.seed(1)
 
 def split_forTrainDevTest(spk_list,train_or_test):
     '''为了保证一个统一的训练和测试的划分标准，不得不用通用的一些方法来限定一下,
@@ -41,6 +41,19 @@ def prepare_datasize(gen):
     #暂时输出的是：语音长度、语音频率数量、视频截断之后的长度
     print 'datasize:',data[1].shape[1],data[1].shape[2],data[4].shape[1],data[-1],(data[4].shape[2],data[4].shape[3])
     return data[1].shape[1],data[1].shape[2],data[4].shape[1],data[-1],(data[4].shape[2],data[4].shape[3])
+
+def create_mix_list(train_or_test,mix_k,data_path,all_spk,Num_samples_per_batch):
+    list_path=data_path+'/list_mixtures/'
+    file_name=open(list_path+'mix_{}_spk_{}.txt'.format(mix_k,train_or_test),'w')
+
+    for i_line in range(Num_samples_per_batch):
+        aim_spk_k=random.sample(all_spk,mix_k)#本次混合的候选人
+        line=''
+        for spk in aim_spk_k:
+            sample_name=random.sample(os.listdir('{}/{}/{}/{}_speech'.format(data_path,train_or_test,spk,spk)),1)[0]
+            line+='GRID/data/{}/{}/{} 0.000 '.format(train_or_test,spk,sample_name)
+        line+='\n'
+        file_name.write(line)
 
 def prepare_data(mode,train_or_test,min=None,max=None):
     '''
@@ -71,16 +84,19 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     #语音刺激
     if config.MODE==3:
         if config.DATASET=='GRID': #开始构建数据集
-            WSJ0_eval_list=['440', '441', '442', '443', '444', '445', '446', '447']
-            WSJ0_test_list=['22g', '22h', '050', '051', '052', '053', '420', '421', '422', '423']
             all_spk_train=os.listdir(data_path+'/train')
             all_spk_eval=os.listdir(data_path+'/valid')
             all_spk_test=os.listdir(data_path+'/test')
-            # all_spk_evaltest=os.listdir(data_path+'/eval_test')
+            if train_or_test=='train':
+                all_spk_type=all_spk_train
+            elif train_or_test=='valid':
+                all_spk_type=all_spk_eval
+            elif train_or_test=='test':
+                all_spk_type=all_spk_test
+
             all_spk = set(all_spk_train+all_spk_eval+all_spk_test).union()
-            spk_samples_list={}
             batch_idx=0
-            list_path=data_path+'/list-mixtures/'
+            list_path=data_path+'/list_mixtures/'
             all_samples_list={}
             sample_idx={}
             number_samples={}
@@ -88,13 +104,16 @@ def prepare_data(mode,train_or_test,min=None,max=None):
             mix_number_list=range(config.MIN_MIX,config.MAX_MIX+1)
             number_samples_all=0
             for mix_k in mix_number_list:
-                if train_or_test=='train':
-                    aim_list_path=list_path+'mix_{}_spk_tr.txt'.format(mix_k)
-                if train_or_test=='valid':
-                    aim_list_path=list_path+'mix_{}_spk_cv.txt'.format(mix_k)
-                if train_or_test=='test':
-                    aim_list_path=list_path+'mix_{}_spk_tt.txt'.format(mix_k)
-
+                aim_list_path=None
+                if config.TRAIN_LIST and train_or_test=='train':
+                    aim_list_path=list_path+'mix_{}_spk_train.txt'.format(mix_k)
+                if config.VALID_LIST and train_or_test=='valid':
+                    aim_list_path=list_path+'mix_{}_spk_valid.txt'.format(mix_k)
+                if config.TEST_LIST and train_or_test=='test':
+                    aim_list_path=list_path+'mix_{}_spk_test.txt'.format(mix_k)
+                if not aim_list_path: #如果没有List就随机创建一个
+                    create_mix_list(train_or_test,mix_k,data_path,all_spk_type,config.Num_samples_per_epoch)
+                    continue
                 all_samples_list[mix_k]=open(aim_list_path).readlines()#[:31]
                 number_samples[mix_k]=len(all_samples_list[mix_k])
                 batch_mix[mix_k]=len(all_samples_list[mix_k])/config.BATCH_SIZE
@@ -106,11 +125,14 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     random.shuffle(all_samples_list[mix_k])
                     print '\nshuffle success!',all_samples_list[mix_k][0]
 
+            if number_samples_all==0:
+                print '*'*10,'There is no lists setted. Begin to sample randomly.'
+                number_samples_all=config.Num_samples_per_epoch
+
             batch_total=number_samples_all/config.BATCH_SIZE
             print 'batch_total_num:',batch_total
 
-            mix_k=random.sample(mix_number_list,1)[0]
-            # while True:
+            mix_k=random.sample(mix_number_list,1)[0] #第一个batch里的混合个数
             for ___ in range(number_samples_all):
                 if ___==number_samples_all-1:
                     print 'ends here.___'
@@ -140,29 +162,25 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     if all_over:
                         print 'all mix number is over~!'
                         yield False
-                    
-                # mix_k=random.sample(mix_number_list,1)[0]
-                if train_or_test=='train':
-                    aim_spk_k=random.sample(all_spk_train,mix_k)#本次混合的候选人
-                elif train_or_test=='eval':
-                    aim_spk_k=random.sample(all_spk_eval,mix_k)#本次混合的候选人
-                elif train_or_test=='test':
-                    aim_spk_k=random.sample(all_spk_test,mix_k)#本次混合的候选人
-                elif train_or_test=='eval_test':
-                    aim_spk_k=random.sample(all_spk_evaltest,mix_k)#本次混合的候选人
 
-                aim_spk_k=re.findall('/([0-9][0-9].)/',all_samples_list[mix_k][sample_idx[mix_k]])
-                aim_spk_db_k=map(float,re.findall(' (.*?) ',all_samples_list[mix_k][sample_idx[mix_k]]))
-                aim_spk_samplename_k=re.findall('/(.{8})\.wav ',all_samples_list[mix_k][sample_idx[mix_k]])
-                assert len(aim_spk_k)==mix_k==len(aim_spk_db_k)==len(aim_spk_samplename_k)
+                if not aim_list_path: #如果没有候选list的话，就每次自己随机sample
+                    if train_or_test=='train':
+                        aim_spk_k=random.sample(all_spk_train,mix_k)#本次混合的候选人
+                    elif train_or_test=='eval':
+                        aim_spk_k=random.sample(all_spk_eval,mix_k)#本次混合的候选人
+                    elif train_or_test=='test':
+                        aim_spk_k=random.sample(all_spk_test,mix_k)#本次混合的候选人
+                    aim_spk_db_k=[0]*mix_k
+
+                else:
+                    aim_spk_k=re.findall('/([0-9][0-9].)/',all_samples_list[mix_k][sample_idx[mix_k]])
+                    aim_spk_db_k=map(float,re.findall(' (.*?) ',all_samples_list[mix_k][sample_idx[mix_k]]))
+                    aim_spk_samplename_k=re.findall('/(.{8})\.wav ',all_samples_list[mix_k][sample_idx[mix_k]])
+                    assert len(aim_spk_k)==mix_k==len(aim_spk_db_k)==len(aim_spk_samplename_k)
 
                 multi_fea_dict_this_sample={}
                 multi_wav_dict_this_sample={}
                 multi_db_dict_this_sample={}
-
-                # if 1 and config.dB and config.MIN_MIX==config.MAX_MIX==2:
-                #     dB_rate=10**(config.dB/20.0*np.random.rand())#e**(0——0.5)
-                #     print 'channel to change with dB:',dB_rate
 
                 for k,spk in enumerate(aim_spk_k):
                     #选择dB的通道～！
@@ -305,3 +323,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
 
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
+
+print 'heer'
+ge=prepare_data('once','train')
+ge.next()

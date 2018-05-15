@@ -79,14 +79,17 @@ LOG_FILE_PRE = './av4ss_output.'+time.strftime('%Y-%m-%d %H:%M:%S')+'.log'
 # 训练文件列表
 TRAIN_LIST = aim_path+'/train_list'
 TRAIN_LIST = True
+TRAIN_LIST = None
 # 验证文件列表
 VALID_LIST = aim_path+'/valid_list'
-VALID_LIST = True
+VALID_LIST = None
 # 测试文件列表
 TEST_LIST = aim_path+'/test_list'
-TEST_LIST = True
+TEST_LIST = None
 # 未登录文件列表
 UNK_LIST = aim_path+'/unk_list'
+
+Num_samples_per_epoch=20000 #如果没有预订提供的list,则设定一个Epoch里的训练样本数目
 # 是否读取参数
 Load_param = True
 #Load_param = False
