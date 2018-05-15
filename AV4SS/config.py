@@ -72,15 +72,19 @@ DATASET = 'GRID'
 valid_mode_dataset() #判断MODE和数据集是否对应，不对就抛出异常
 # aim_path='./Dataset_Multi/'+str(MODE)+'/'+DATASET
 # aim_path='/media/sw/Elements/数据集/Grid/Dataset_Multi/'+str(MODE)+'/'+DATASET
-aim_path='../Torch_multi/Dataset_Multi/'+str(MODE)+'/'+DATASET
+# aim_path='../Torch_multi/Dataset_Multi/'+str(MODE)+'/'+DATASET
+aim_path='./Dataset/'+str(MODE)+'/'+DATASET
 # 日志记录，Record log into this file, such as dl4ss_output.log_20170303_110305
-LOG_FILE_PRE = './dl4ss_output.'+time.strftime('%Y-%m-%d %H:%M:%S')+'.log'
+LOG_FILE_PRE = './av4ss_output.'+time.strftime('%Y-%m-%d %H:%M:%S')+'.log'
 # 训练文件列表
 TRAIN_LIST = aim_path+'/train_list'
+TRAIN_LIST = True
 # 验证文件列表
 VALID_LIST = aim_path+'/valid_list'
+VALID_LIST = True
 # 测试文件列表
 TEST_LIST = aim_path+'/test_list'
+TEST_LIST = True
 # 未登录文件列表
 UNK_LIST = aim_path+'/unk_list'
 # 是否读取参数
