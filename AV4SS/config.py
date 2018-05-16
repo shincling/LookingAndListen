@@ -109,7 +109,7 @@ EMBEDDING_SIZE = 50
 # EMBEDDING_SIZE = 40
 # 是否丰富数据
 AUGMENT_DATA = False
-AUGMENT_DATA = True
+# AUGMENT_DATA = True
 # set the max epoch of training
 MAX_EPOCH = 600
 # epoch size
@@ -120,7 +120,7 @@ BATCH_SIZE = 3
 # 评估的batch size
 BATCH_SIZE_EVAL = 10
 # feature frame rate
-FRAME_RATE = 8000
+FRAME_RATE = 2*8000
 # 帧时长(ms)
 FRAME_LENGTH = int(0.032 * FRAME_RATE)
 # 帧移(ms)
@@ -136,8 +136,8 @@ ALPHA = 0.5
 quchong_alpha=1
 dB=5
 # 设置训练/开发/验证模型的最大语音长度(秒)
-MAX_LEN = 5
-MAX_LEN = FRAME_RATE*MAX_LEN
+MAX_LEN = 3
+MAX_LEN_SPEECH = FRAME_RATE*MAX_LEN
 #MAX_LEN = update_max_len([TRAIN_LIST], MAX_LEN)
 # 帧长
 WINDOWS = FRAME_LENGTH
@@ -158,10 +158,10 @@ BGD_NOISE_WAV = None
 BGD_NOISE_FILE = 'Dataset_Multi/BGD_150203_010_STR.CH1.wav'
 Out_Sep_Result=True
 
-VideoSize=(299,299)
-NUM_ALL_FRAMES=25
-VIDEO_RATE=10
-channel_first=True
+# VideoSize=(299,299)
+# NUM_ALL_FRAMES=25
+# VIDEO_RATE=10
+# channel_first=True
 if MODE==2:
     '''Params for Image'''
     ImageSize=(28,28)
@@ -169,8 +169,9 @@ elif MODE==3:
     '''Params for Video'''
     VideoSize=(299,299)
     NUM_ALL_FRAMES=25
-    VIDEO_RATE=10
+    VIDEO_RATE=25
     channel_first=True
+    MAX_LEN_VIDEO=MAX_LEN*VIDEO_RATE
 
 def load_bgd_wav(file_path):
     signal, rate = sf.read(file_path)  # signal 是采样值，rate 是采样频率
