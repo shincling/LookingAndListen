@@ -72,6 +72,12 @@ def create_mix_list(train_or_test,mix_k,data_path,all_spk,Num_samples_per_batch)
         line+='\n'
         file_name.write(line)
 
+def convert2(array):
+    shape=array.shape
+    o=array.real.reshape(shape[0],shape[1],1).repeat(2,2)
+    o[:,:,1]=array.imag
+    return o
+
 def prepare_data(mode,train_or_test,min=None,max=None):
     '''
     :param
@@ -248,8 +254,9 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         aim_spkid.append(aim_spkname)
                         wav_mix=signal
                         # print signal.shape
-                        aim_fea_clean = np.transpose(np.abs(librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
+                        aim_fea_clean = np.transpose((librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
                                                                                     config.WIN_LEN)))
+                        aim_fea_clean=convert2(aim_fea_clean)
                         # print aim_fea_clean.shape
                         #TODO:这个实现出来跟原文不太一样啊，是２５７×３０１（原文是２９８）
                         aim_fea.append(aim_fea_clean)
@@ -287,15 +294,16 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                             aim_video_image_list.append(im_array)
                         multi_video_dict_this_sample[spk]=aim_video_image_list
 
-                        # shutil.rmtree(sample_name)#删除临时文件夹
+                        shutil.rmtree(sample_name)#删除临时文件夹
 
                     else:
                         ratio=10**(aim_spk_db_k[k]/20.0)
                         signal=ratio*signal
                         wav_mix = wav_mix + signal  # 混叠后的语音
                         #　这个说话人的语音
-                        some_fea_clean = np.transpose(np.abs(librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
+                        some_fea_clean = np.transpose((librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
                                                                                        config.WIN_LEN)))
+                        some_fea_clean=convert2(some_fea_clean)
                         multi_fea_dict_this_sample[spk]=some_fea_clean
                         multi_wav_dict_this_sample[spk]=signal
 
@@ -333,13 +341,14 @@ def prepare_data(mode,train_or_test,min=None,max=None):
 
                 # 这里采用log 以后可以考虑采用MFCC或GFCC特征做为输入
                 if config.IS_LOG_SPECTRAL:
-                    feature_mix = np.log(np.transpose(np.abs(librosa.core.spectrum.stft(wav_mix, config.FRAME_LENGTH,
+                    feature_mix = np.log(np.transpose((librosa.core.spectrum.stft(wav_mix, config.FRAME_LENGTH,
                                                                                         config.FRAME_SHIFT,
                                                                                         window=config.WINDOWS)))
                                          + np.spacing(1))
                 else:
-                    feature_mix = np.transpose(np.abs(librosa.core.spectrum.stft(wav_mix, config.FFT_SIZE, config.HOP_LEN,
+                    feature_mix = np.transpose((librosa.core.spectrum.stft(wav_mix, config.FFT_SIZE, config.HOP_LEN,
                                                                                     config.WIN_LEN,)))
+                    feature_mix=convert2(feature_mix)
 
                 mix_speechs[batch_idx,:]=wav_mix
                 mix_feas.append(feature_mix)
@@ -369,7 +378,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         dict_spk_to_idx={spk:idx for idx,spk in enumerate(all_spk)}
                         dict_idx_to_spk={idx:spk for idx,spk in enumerate(all_spk)}
                         yield all_spk,dict_spk_to_idx,dict_idx_to_spk,\
-                              aim_fea.shape[1],aim_fea.shape[2],32,len(all_spk),batch_total
+                              aim_fea.shape[1],aim_fea.shape[2],config.MAX_LEN_VIDEO,len(all_spk),batch_total
                               #上面的是：语音长度、语音频率、视频分割多少帧 TODO:后面把这个替换了query.shape[1]
                     elif mode=='once':
                         yield {'mix_wav':mix_speechs,
@@ -416,6 +425,6 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
 
-ge=prepare_data('global','train')
-cc=ge.next()
-print cc
+# ge=prepare_data('global','train')
+# cc=ge.next()
+# print cc
