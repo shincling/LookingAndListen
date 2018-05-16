@@ -1,0 +1,425 @@
+# coding=utf8
+import sys
+import torch
+from torch import nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import numpy as np
+import random
+import time
+import config as config
+from predata import prepare_data
+import myNet
+# from test_multi_labels_speech import multi_label_vector
+import os
+import shutil
+import librosa
+import soundfile as sf
+
+# import matlab
+# import matlab.engine
+# from separation import bss_eval_sources
+# import bss_test
+
+
+torch.cuda.set_device(0)
+config.EPOCH_SIZE = 300
+np.random.seed(1)  # 设定种子
+torch.manual_seed(1)
+random.seed(1)
+# stout=sys.stdout
+# log_file=open(config.LOG_FILE_PRE,'w')
+# sys.stdout=log_file
+# logfile=config.LOG_FILE_PRE
+test_all_outputchannel = 0
+
+
+def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk, data, sort_idx):
+    if config.Out_Sep_Result:
+        dst = 'batch_output'
+        if os.path.exists(dst):
+            print " cleanup: " + dst + "/"
+            shutil.rmtree(dst)
+        os.makedirs(dst)
+
+    sample_idx = 0
+    for each_pre, mask, s_idx in zip(multi_mask, top_k_mask_mixspeech, sort_idx):
+        _mix_spec = data['mix_phase'][sample_idx]
+        xxx = x_input[sample_idx].data.cpu().numpy()
+        phase_mix = np.angle(_mix_spec)
+        for idx, each_spk in enumerate(each_pre):
+            this_spk = idx
+            y_pre_map = each_pre[idx].data.cpu().numpy()
+            # 如果第二个通道概率比较大
+            # if idx==0 and s_idx[0].data.cpu().numpy()>s_idx[1].data.cpu().numpy():
+            #      y_pre_map=1-each_pre[1].data.cpu().numpy()
+            # if idx==1 and s_idx[0].data.cpu().numpy()<s_idx[1].data.cpu().numpy():
+            #      y_pre_map=1-each_pre[0].data.cpu().numpy()
+            y_pre_map = y_pre_map * xxx
+            _pred_spec = y_pre_map * np.exp(1j * phase_mix)
+            wav_pre = librosa.core.spectrum.istft(np.transpose(_pred_spec), config.FRAME_SHIFT)
+            min_len = len(wav_pre)
+            if test_all_outputchannel:
+                min_len = len(wav_pre)
+            sf.write('batch_output/{}_testspk{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
+                     config.FRAME_RATE, )
+        sf.write('batch_output/{}_True_mix.wav'.format(sample_idx), data['mix_wav'][sample_idx][:min_len],
+                 config.FRAME_RATE, )
+        sample_idx += 1
+
+    for sample_idx, each_sample in enumerate(data['multi_spk_wav_list']):
+        for each_spk in each_sample.keys():
+            this_spk = each_spk
+            wav_genTrue = each_sample[this_spk]
+            min_len = 39936
+            sf.write('batch_output/{}_{}_realTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+                     config.FRAME_RATE, )
+
+    for sample_idx, each_sample in enumerate(data['multi_spk_fea_list']):
+        _mix_spec = data['mix_phase'][sample_idx]
+        phase_mix = np.angle(_mix_spec)
+        for each_spk in each_sample.keys():
+            this_spk = each_spk
+            y_true_map = each_sample[this_spk]
+            _genture_spec = y_true_map * np.exp(1j * phase_mix)
+            wav_genTrue = librosa.core.spectrum.istft(np.transpose(_genture_spec), config.FRAME_SHIFT, )
+            min_len = len(wav_pre)
+            sf.write('batch_output/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+                     config.FRAME_RATE, )
+
+
+def bss_eval(predict_multi_map, y_multi_map, y_map_gtruth, dict_idx2spk, train_data):
+    # 评测和结果输出部分
+    if config.Out_Sep_Result:
+        dst = 'batch_output'
+        if os.path.exists(dst):
+            print " \ncleanup: " + dst + "/"
+            shutil.rmtree(dst)
+        os.makedirs(dst)
+
+    # 对于每个sample
+    sample_idx = 0  # 代表一个batch里的依次第几个
+    for each_y, each_pre, each_trueVector, spk_name in zip(y_multi_map, predict_multi_map, y_map_gtruth,
+                                                           train_data['aim_spkname']):
+        _mix_spec = train_data['mix_phase'][sample_idx]
+        phase_mix = np.angle(_mix_spec)
+        for idx, one_cha in enumerate(each_trueVector):
+            if one_cha:  # 如果此刻这个候选人通道是开启的
+                this_spk = dict_idx2spk[one_cha]
+                y_true_map = each_y[idx].data.cpu().numpy()
+                y_pre_map = each_pre[idx].data.cpu().numpy()
+                _pred_spec = y_pre_map * np.exp(1j * phase_mix)
+                _genture_spec = y_true_map * np.exp(1j * phase_mix)
+                wav_pre = librosa.core.spectrum.istft(np.transpose(_pred_spec), config.FRAME_SHIFT)
+                wav_genTrue = librosa.core.spectrum.istft(np.transpose(_genture_spec), config.FRAME_SHIFT, )
+                min_len = np.min((len(train_data['multi_spk_wav_list'][sample_idx][this_spk]), len(wav_pre)))
+                if test_all_outputchannel:
+                    min_len = len(wav_pre)
+                sf.write('batch_output/{}_{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
+                         config.FRAME_RATE, )
+                sf.write('batch_output/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+                         config.FRAME_RATE, )
+        sf.write('batch_output/{}_True_mix.wav'.format(sample_idx), train_data['mix_wav'][sample_idx][:min_len],
+                 config.FRAME_RATE, )
+        sample_idx += 1
+
+
+def print_memory_state(memory):
+    print '\n memory states:'
+    for one in memory:
+        print '\nspk:{},video:{},age:{}'.format(one[0], one[1].cpu().numpy()[
+                                                        2 * config.EMBEDDING_SIZE - 3:2 * config.EMBEDDING_SIZE + 5],
+                                                one[2])
+
+
+
+
+class ATTENTION(nn.Module):
+    def __init__(self, hidden_size, mode='dot'):
+        super(ATTENTION, self).__init__()
+        # self.mix_emb_size=config.EMBEDDING_SIZE
+        self.hidden_size = hidden_size
+        self.align_hidden_size = hidden_size  # align模式下的隐层大小，暂时取跟原来一致的
+        self.mode = mode
+        self.Linear_1 = nn.Linear(self.hidden_size, self.align_hidden_size, bias=False)
+        self.Linear_2 = nn.Linear(hidden_size, self.align_hidden_size, bias=False)
+        self.Linear_3 = nn.Linear(self.align_hidden_size, 1, bias=False)
+
+    def forward(self, mix_hidden, query):
+        # todo:这个要弄好，其实也可以直接抛弃memory来进行attention | DONE
+        BATCH_SIZE = mix_hidden.size()[0]
+        # assert query.size()==(BATCH_SIZE,self.hidden_size)
+        # assert mix_hidden.size()[-1]==self.hidden_size
+        # mix_hidden：bs,max_len,fre,hidden_size  query:bs,hidden_size
+        if self.mode == 'dot':
+            # mix_hidden=mix_hidden.view(-1,1,self.hidden_size)
+            mix_shape = mix_hidden.size()
+            mix_hidden = mix_hidden.view(BATCH_SIZE, -1, self.hidden_size)
+            query = query.view(-1, self.hidden_size, 1)
+            # print '\n\n',mix_hidden.requires_grad,query.requires_grad,'\n\n'
+            dot = torch.baddbmm(Variable(torch.zeros(1, 1).cuda()), mix_hidden, query)
+            energy = dot.view(BATCH_SIZE, mix_shape[1], mix_shape[2])
+            mask = F.sigmoid(energy)
+            return mask
+
+        elif self.mode == 'align':
+            # mix_hidden=Variable(mix_hidden)
+            # query=Variable(query)
+            mix_shape = mix_hidden.size()
+            mix_hidden = mix_hidden.view(-1, self.hidden_size)
+            mix_hidden = self.Linear_1(mix_hidden).view(BATCH_SIZE, -1, self.align_hidden_size)
+            query = self.Linear_2(query).view(-1, 1, self.align_hidden_size)  # bs,1,hidden
+            sum = F.tanh(mix_hidden + query)
+            # TODO:从这里开始做起
+            energy = self.Linear_3(sum.view(-1, self.align_hidden_size)).view(BATCH_SIZE, mix_shape[1], mix_shape[2])
+            mask = F.sigmoid(energy)
+            return mask
+
+
+class VIDEO_QUERY(nn.Module):
+    def __init__(self, total_frames, video_size, spk_total_num):
+        super(VIDEO_QUERY, self).__init__()
+        self.total_frames = total_frames
+        self.video_size = video_size
+        self.spk_total_num = spk_total_num
+        self.images_net = myNet.inception_v3(pretrained=True)  # 注意这个输出[2]才是最后的隐层状态
+        for para in self.images_net.parameters():
+            para.requires_grad = False
+        self.size_hidden_image = 2048  # 抽取的图像的隐层向量的长度,Inception_v3对应的是2048
+        self.lstm_layer = nn.LSTM(
+            input_size=self.size_hidden_image,
+            hidden_size=config.HIDDEN_UNITS,
+            num_layers=config.NUM_LAYERS,
+            batch_first=True,
+            bidirectional=True
+        )
+        self.dense = nn.Linear(2 * config.HIDDEN_UNITS, config.EMBEDDING_SIZE)  # 把输出的东西映射到embding_size的维度上
+        self.Linear = nn.Linear(config.EMBEDDING_SIZE, self.spk_total_num)
+
+    def forward(self, x):
+        assert x.size()[2] == 3  # 判断是否不同通道在第三个维度
+        x = x.contiguous()
+        x = x.view(-1, 3, self.video_size[0], self.video_size[1])
+        x_hidden_images = self.images_net(x)[2]
+        x_hidden_images = x_hidden_images.view(-1, self.total_frames, self.size_hidden_image)
+        x_lstm, hidden_lstm = self.lstm_layer(x_hidden_images)
+        last_hidden = self.dense(x_lstm[:, -1])
+        # out=F.softmax(self.Linear(last_hidden)) #出处类别的概率,为什么很多都不加softmax的。。。
+        out = self.Linear(last_hidden)  # 出处类别的概率,为什么很多都不加softmax的。。。
+        return out, last_hidden
+
+
+class MIX_SPEECH(nn.Module):
+    def __init__(self):
+        super(MIX_SPEECH, self).__init__()
+        self.cnn_list=[
+        nn.Conv2d(2,96,(1,7),stride=1,dilation=(1,1)),
+        nn.Conv2d(96,96,(7,1),stride=1,dilation=(1,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(1,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(2,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(4,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(8,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(16,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(32,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(1,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(2,2)),
+        # NO.11
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(4,4)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(8,8)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(16,16)),
+        nn.Conv2d(96,96,(5,5),stride=1,dilation=(32,32)),
+        nn.Conv2d(96,8,(1,1),stride=1,dilation=(1,1))
+        ]
+
+    def forward(self, x):
+        x = x.contiguous()
+        for idx,cnn_layer in enumerate(self.cnn_list):
+            x=F.relu(cnn_layer(x))
+            print 'speech shape after CNNs:',idx,'', x.size()
+        return x
+
+class MIX_SPEECH_classifier(nn.Module):
+    def __init__(self, input_fre, mix_speech_len, num_labels):
+        super(MIX_SPEECH_classifier, self).__init__()
+        self.input_fre = input_fre
+        self.mix_speech_len = mix_speech_len
+        self.layer = nn.LSTM(
+            input_size=input_fre,
+            hidden_size=2 * config.HIDDEN_UNITS,
+            num_layers=3,
+            batch_first=True,
+            bidirectional=True
+        )
+        self.Linear = nn.Linear(2 * 2 * config.HIDDEN_UNITS, num_labels)
+
+    def forward(self, x):
+        x, hidden = self.layer(x)
+        x = x.contiguous()  # bs*len*600
+        # x=x.view(config.BATCH_SIZE*self.mix_speech_len,-1)
+        x = torch.mean(x, 1)
+        out = F.sigmoid(self.Linear(x))
+        # out=self.Linear(x)
+        return out
+
+class MULTI_MODAL(object):
+    def __init__(self, datasize, gen):
+        print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
+        self.mix_speech_len, self.speech_fre, self.total_frames, self.spk_num_total = datasize
+        self.gen = gen
+
+    def build(self):
+        mix_hidden_layer_3d = MIX_SPEECH(self.speech_fre, self.mix_speech_len)
+        output = mix_hidden_layer_3d(Variable(torch.from_numpy(self.gen.next()[1])))
+
+
+def top_k_mask(batch_pro, alpha, top_k):
+    'batch_pro是 bs*n的概率分布，例如2×3的，每一行是一个概率分布\
+    alpha是阈值，大于它的才可以取，可以跟Multi-label语音分离的ACC的alpha对应;\
+    top_k是最多输出几个候选目标\
+    输出是与bs*n的一个mask，float型的'
+    size = batch_pro.size()
+    final = torch.zeros(size)
+    sort_result, sort_index = torch.sort(batch_pro, 1, True)  # 先排个序
+    sort_index = sort_index[:, :top_k]  # 选出每行的top_k的id
+    sort_result = torch.sum(sort_result > alpha, 1)
+    for line_idx in range(size[0]):
+        line_top_k = sort_index[line_idx][:int(sort_result[line_idx].data.cpu().numpy())]
+        line_top_k = line_top_k.data.cpu().numpy()
+        for i in line_top_k:
+            final[line_idx, i] = 1
+    return final, sort_index
+
+
+def main():
+    print('go to model')
+    print '*' * 80
+
+    # spk_global_gen = prepare_data(mode='global', train_or_test='train')  # 写一个假的数据生成，可以用来写模型先
+    # global_para = spk_global_gen.next()
+    # print global_para
+    # spk_all_list, dict_spk2idx, dict_idx2spk, mix_speech_len, speech_fre, total_frames, spk_num_total, batch_total = global_para
+    # del spk_global_gen
+    # num_labels = len(spk_all_list)
+
+    print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
+    mix_hidden_layer_3d = MIX_SPEECH().cuda()
+    # mix_hidden_layer_3d(Variable(torch.rand(3,2,298,257)))
+    mix_hidden_layer_3d(Variable(torch.rand(3,2,257,298)))
+    1/0
+    mix_speech_classifier = MIX_SPEECH_classifier(speech_fre, mix_speech_len, num_labels).cuda()
+    mix_speech_multiEmbedding = SPEECH_EMBEDDING(num_labels, config.EMBEDDING_SIZE,
+                                                 spk_num_total + config.UNK_SPK_SUPP).cuda()
+    print mix_hidden_layer_3d
+    print mix_speech_classifier
+
+    # This part is to conduct the video inputs.
+    query_video_layer = VIDEO_QUERY(total_frames, config.VideoSize, spk_num_total).cuda()
+    query_video_layer = None
+    print query_video_layer
+    # query_video_output,xx=query_video_layer(Variable(torch.from_numpy(data[4])))
+
+    att_layer = ATTENTION(config.EMBEDDING_SIZE, 'align').cuda()
+    att_speech_layer = ATTENTION(config.EMBEDDING_SIZE, 'align').cuda()
+
+    # del data_generator
+    # del data
+
+    optimizer = torch.optim.Adam([{'params': mix_hidden_layer_3d.parameters()},
+                                  {'params': mix_speech_multiEmbedding.parameters()},
+                                  {'params': mix_speech_classifier.parameters()},
+                                  # {'params':query_video_layer.lstm_layer.parameters()},
+                                  # {'params':query_video_layer.dense.parameters()},
+                                  # {'params':query_video_layer.Linear.parameters()},
+                                  {'params': att_layer.parameters()},
+                                  {'params': att_speech_layer.parameters()},
+                                  # ], lr=0.02,momentum=0.9)
+                                  ], lr=0.00005)
+    if 1 and config.Load_param:
+        mix_speech_classifier.load_state_dict(torch.load('params/param_speech_123onezeroag4_WSJ0_multilabel_epoch70'))
+        att_speech_layer.load_state_dict(
+            torch.load('params/param_mix2_db2dropout_WSJ0_attlayer_90', map_location={'cuda:1': 'cuda:0'}))
+        mix_hidden_layer_3d.load_state_dict(
+            torch.load('params/param_mix2_db2dropout_WSJ0_hidden3d_90', map_location={'cuda:1': 'cuda:0'}))
+        mix_speech_multiEmbedding.load_state_dict(
+            torch.load('params/param_mix2_db2dropout_WSJ0_emblayer_90', map_location={'cuda:1': 'cuda:0'}))
+
+    loss_func = torch.nn.MSELoss()  # the target label is NOT an one-hotted
+    loss_multi_func = torch.nn.MSELoss()  # the target label is NOT an one-hotted
+    # loss_multi_func = torch.nn.L1Loss()  # the target label is NOT an one-hotted
+    loss_query_class = torch.nn.CrossEntropyLoss()
+
+    print '''Begin to calculate.'''
+    for epoch_idx in range(config.MAX_EPOCH):
+        if epoch_idx > 0:
+            print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx - 1, SDR_SUM.mean())
+        SDR_SUM = np.array([])
+        # print_memory_state(memory.memory)
+        print 'SDR_SUM for epoch {}:{}'.format(epoch_idx - 1, SDR_SUM.mean())
+        for batch_idx in range(config.EPOCH_SIZE):
+            print '*' * 40, epoch_idx, batch_idx, '*' * 40
+            train_data_gen = prepare_data('once', 'train')
+            # train_data_gen=prepare_data('once','test')
+            # train_data_gen=prepare_data('once','eval_test')
+            train_data = train_data_gen.next()
+
+            '''混合语音len,fre,Emb 3D表示层'''
+            mix_speech_hidden = mix_hidden_layer_3d(Variable(torch.from_numpy(train_data['mix_feas'])).cuda())
+            # 暂时关掉video部分,因为s2 s3 s4 的视频数据不全暂时
+
+            '''Speech self Sepration　语音自分离部分'''
+            mix_speech_output = mix_speech_classifier(Variable(torch.from_numpy(train_data['mix_feas'])).cuda())
+            # 从数据里得到ground truth的说话人名字和vector
+            y_spk_list = [one.keys() for one in train_data['multi_spk_fea_list']]
+            y_spk_list = train_data['multi_spk_fea_list']
+            y_spk_gtruth, y_map_gtruth = multi_label_vector(y_spk_list, dict_spk2idx)
+            # 如果训练阶段使用Ground truth的分离结果作为判别
+            if 1 and config.Ground_truth:
+                mix_speech_output = Variable(torch.from_numpy(y_map_gtruth)).cuda()
+                if 0 and test_all_outputchannel:  # 把输入的mask改成全１，可以用来测试输出所有的channel
+                    mix_speech_output = Variable(torch.ones(config.BATCH_SIZE, num_labels, ))
+                    y_map_gtruth = np.ones([config.BATCH_SIZE, num_labels])
+
+            max_num_labels = 2
+            top_k_mask_mixspeech, top_k_sort_index = top_k_mask(mix_speech_output, alpha=-0.5,
+                                                                top_k=max_num_labels)  # torch.Float型的
+            top_k_mask_idx = [np.where(line == 1)[0] for line in top_k_mask_mixspeech.numpy()]
+            mix_speech_multiEmbs = mix_speech_multiEmbedding(top_k_mask_mixspeech,
+                                                             top_k_mask_idx)  # bs*num_labels（最多混合人个数）×Embedding的大小
+
+            assert len(top_k_mask_idx[0]) == len(top_k_mask_idx[-1])
+            top_k_num = len(top_k_mask_idx[0])
+
+            # 需要计算：mix_speech_hidden[bs,len,fre,emb]和mix_mulEmbedding[bs,num_labels,EMB]的Ａttention
+            # 把　前者扩充为bs*num_labels,XXXXXXXXX的，后者也是，然后用ＡＴＴ函数计算它们再转回来就好了　
+            mix_speech_hidden_5d = mix_speech_hidden.view(config.BATCH_SIZE, 1, mix_speech_len, speech_fre,
+                                                          config.EMBEDDING_SIZE)
+            mix_speech_hidden_5d = mix_speech_hidden_5d.expand(config.BATCH_SIZE, top_k_num, mix_speech_len, speech_fre,
+                                                               config.EMBEDDING_SIZE).contiguous()
+            mix_speech_hidden_5d_last = mix_speech_hidden_5d.view(-1, mix_speech_len, speech_fre, config.EMBEDDING_SIZE)
+            # att_speech_layer=ATTENTION(config.EMBEDDING_SIZE,'align').cuda()
+            att_speech_layer = ATTENTION(config.EMBEDDING_SIZE, 'dot').cuda()
+            att_multi_speech = att_speech_layer(mix_speech_hidden_5d_last,
+                                                mix_speech_multiEmbs.view(-1, config.EMBEDDING_SIZE))
+            # print att_multi_speech.size()
+            att_multi_speech = att_multi_speech.view(config.BATCH_SIZE, top_k_num, mix_speech_len,
+                                                     speech_fre)  # bs,num_labels,len,fre这个东西
+            # print att_multi_speech.size()
+            multi_mask = att_multi_speech
+            # top_k_mask_mixspeech_multi=top_k_mask_mixspeech.view(config.BATCH_SIZE,top_k_num,1,1).expand(config.BATCH_SIZE,top_k_num,mix_speech_len,speech_fre)
+            # multi_mask=multi_mask*Variable(top_k_mask_mixspeech_multi).cuda()
+
+            x_input_map = Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
+            # print x_input_map.size()
+            x_input_map_multi = x_input_map.view(config.BATCH_SIZE, 1, mix_speech_len, speech_fre).expand(
+                config.BATCH_SIZE, top_k_num, mix_speech_len, speech_fre)
+            # predict_multi_map=multi_mask*x_input_map_multi
+            predict_multi_map = multi_mask * x_input_map_multi
+
+            bss_eval_fromGenMap(multi_mask, x_input_map, top_k_mask_mixspeech, dict_idx2spk, train_data,
+                                top_k_sort_index)
+            SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output/', 2))
+            print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
+
+
+if __name__ == "__main__":
+    main()
