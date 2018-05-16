@@ -86,7 +86,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     if max:
         config.MAX_MIX=max
 
-    mix_speechs=np.zeros((config.BATCH_SIZE,config.MAX_LEN))
+    mix_speechs=np.zeros((config.BATCH_SIZE,config.MAX_LEN_SPEECH))
     mix_feas=[]#应该是bs,n_frames,n_fre这么多
     mix_phase=[]#应该是bs,n_frames,n_fre这么多
     aim_fea=[]#应该是bs,n_frames,n_fre这么多
@@ -221,8 +221,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     if rate != config.FRAME_RATE:
                         # 如果频率不是设定的频率则需要进行转换
                         signal = resampy.resample(signal, rate, config.FRAME_RATE, filter='kaiser_best')
-                    if signal.shape[0] > config.MAX_LEN:  # 根据最大长度裁剪
-                        signal = signal[:config.MAX_LEN]
+                    if signal.shape[0] > config.MAX_LEN_SPEECH:  # 根据最大长度裁剪
+                        signal = signal[:config.MAX_LEN_SPEECH]
                     # 更新混叠语音长度
                     if signal.shape[0] > mix_len:
                         mix_len = signal.shape[0]
@@ -235,8 +235,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         random_shift = random.sample(range(len(signal)), 1)[0]
                         signal = np.append(signal[random_shift:], signal[:random_shift])
 
-                    if signal.shape[0] < config.MAX_LEN:  # 根据最大长度用 0 补齐,
-                        signal=np.append(signal,np.zeros(config.MAX_LEN - signal.shape[0]))
+                    if signal.shape[0] < config.MAX_LEN_SPEECH:  # 根据最大长度用 0 补齐,
+                        signal=np.append(signal,np.zeros(config.MAX_LEN_SPEECH - signal.shape[0]))
 
                     if k==0:#第一个作为目标
                         ratio=10**(aim_spk_db_k[k]/20.0)
@@ -247,8 +247,11 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         aim_spk_speech=signal
                         aim_spkid.append(aim_spkname)
                         wav_mix=signal
-                        aim_fea_clean = np.transpose(np.abs(librosa.core.spectrum.stft(signal, config.FRAME_LENGTH,
-                                                                                    config.FRAME_SHIFT)))
+                        # print signal.shape
+                        aim_fea_clean = np.transpose(np.abs(librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
+                                                                                    config.WIN_LEN)))
+                        # print aim_fea_clean.shape
+                        #TODO:这个实现出来跟原文不太一样啊，是２５７×３０１（原文是２９８）
                         aim_fea.append(aim_fea_clean)
                         # 把第一个人顺便也注册进去混合dict里
                         multi_fea_dict_this_sample[spk]=aim_fea_clean
@@ -264,7 +267,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         if len(aim_video_imagename_list)>config.MAX_LEN_VIDEO:
                             aim_video_imagename_list=aim_video_imagename_list[:config.MAX_LEN_VIDEO]
                         if len(aim_video_imagename_list)<config.MAX_LEN_VIDEO:#视频短了，用最后一张补齐。
-                            aim_video_imagename_list.extend([aim_video_imagename_list[-1] for jj in range(config.MAX_LEN_SPEECH-len(aim_video_imagename_list))])
+                            aim_video_imagename_list.extend([aim_video_imagename_list[-1] for jj in range(config.MAX_LEN_VIDEO-len(aim_video_imagename_list))])
                             
                         for img in aim_video_imagename_list:
                             im=Image.open(sample_name+'/'+img)
@@ -291,8 +294,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         signal=ratio*signal
                         wav_mix = wav_mix + signal  # 混叠后的语音
                         #　这个说话人的语音
-                        some_fea_clean = np.transpose(np.abs(librosa.core.spectrum.stft(signal, config.FRAME_LENGTH,
-                                                                                       config.FRAME_SHIFT,)))
+                        some_fea_clean = np.transpose(np.abs(librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
+                                                                                       config.WIN_LEN)))
                         multi_fea_dict_this_sample[spk]=some_fea_clean
                         multi_wav_dict_this_sample[spk]=signal
 
@@ -335,13 +338,15 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                                                                         window=config.WINDOWS)))
                                          + np.spacing(1))
                 else:
-                    feature_mix = np.transpose(np.abs(librosa.core.spectrum.stft(wav_mix, config.FRAME_LENGTH,
-                                                                                     config.FRAME_SHIFT,)))
+                    feature_mix = np.transpose(np.abs(librosa.core.spectrum.stft(wav_mix, config.FFT_SIZE, config.HOP_LEN,
+                                                                                    config.WIN_LEN,)))
 
                 mix_speechs[batch_idx,:]=wav_mix
                 mix_feas.append(feature_mix)
-                mix_phase.append(np.transpose(librosa.core.spectrum.stft(wav_mix, config.FRAME_LENGTH,
-                                                                                     config.FRAME_SHIFT,)))
+                # mix_phase.append(np.transpose(librosa.core.spectrum.stft(wav_mix, config.FRAME_LENGTH,
+                #                                                                      config.FRAME_SHIFT,)))
+                mix_phase.append(np.transpose(librosa.core.spectrum.stft(wav_mix, config.FFT_SIZE, config.HOP_LEN,
+                                                                         config.WIN_LEN,)))
                 batch_idx+=1
                 # print 'batch_dix:{}/{},'.format(batch_idx,config.BATCH_SIZE),
                 if batch_idx==config.BATCH_SIZE: #填满了一个batch
@@ -381,7 +386,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                }
 
                     batch_idx=0
-                    mix_speechs=np.zeros((config.BATCH_SIZE,config.MAX_LEN))
+                    mix_speechs=np.zeros((config.BATCH_SIZE,config.MAX_LEN_SPEECH))
                     mix_feas=[]#应该是bs,n_frames,n_fre这么多
                     mix_phase=[]
                     aim_fea=[]#应该是bs,n_frames,n_fre这么多
@@ -411,5 +416,6 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
 
-ge=prepare_data('once','train')
+ge=prepare_data('global','train')
 cc=ge.next()
+print cc

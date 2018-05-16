@@ -123,6 +123,7 @@ BATCH_SIZE_EVAL = 10
 FRAME_RATE = 2*8000
 # 帧时长(ms)
 FRAME_LENGTH = int(0.032 * FRAME_RATE)
+FRAME_LENGTH = int(0.010 * FRAME_RATE)
 # 帧移(ms)
 FRAME_SHIFT = int(0.016 * FRAME_RATE)
 # 是否shuffle_batch
@@ -141,7 +142,10 @@ MAX_LEN_SPEECH = FRAME_RATE*MAX_LEN
 #MAX_LEN = update_max_len([TRAIN_LIST], MAX_LEN)
 # 帧长
 WINDOWS = FRAME_LENGTH
-# 训练模型权重的目录
+FFT_SIZE=512
+HOP_LEN=int(0.010 * FRAME_RATE)
+WIN_LEN=int(0.025* FRAME_RATE)
+ # 训练模型权重的目录
 TMP_WEIGHT_FOLDER = aim_path+'/_tmp_weights'
 # 未登录说话人, False: 由说话人提取记忆，True: 进行语音抽取，# TODO NONE: 有相似度计算确定是否进行语音更新
 # 更新，UNK_SPK用spk idx=0替代
