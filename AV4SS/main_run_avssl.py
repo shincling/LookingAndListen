@@ -131,50 +131,42 @@ def print_memory_state(memory):
                                                         2 * config.EMBEDDING_SIZE - 3:2 * config.EMBEDDING_SIZE + 5],
                                                 one[2])
 
-
-
-
 class ATTENTION(nn.Module):
-    def __init__(self, hidden_size, mode='dot'):
+    def __init__(self,speech_fre):
+        self.fre=speech_fre#应该是257
         super(ATTENTION, self).__init__()
-        # self.mix_emb_size=config.EMBEDDING_SIZE
-        self.hidden_size = hidden_size
-        self.align_hidden_size = hidden_size  # align模式下的隐层大小，暂时取跟原来一致的
-        self.mode = mode
-        self.Linear_1 = nn.Linear(self.hidden_size, self.align_hidden_size, bias=False)
-        self.Linear_2 = nn.Linear(hidden_size, self.align_hidden_size, bias=False)
-        self.Linear_3 = nn.Linear(self.align_hidden_size, 1, bias=False)
+        self.lstm_layer = nn.LSTM(
+            input_size=self.size_hidden_image,
+            hidden_size=config.HIDDEN_UNITS,
+            num_layers=config.NUM_LAYERS,
+            batch_first=True,
+            bidirectional=True
+        )
+        self.fc_layers=[nn.Linear(2*config.HIDDEN_UNITS,config.FC_UNITS) for i in range(3)]
+        self.final_layer=nn.Linear(config.FC_UNITS,speech_fre*2)
 
     def forward(self, mix_hidden, query):
         # todo:这个要弄好，其实也可以直接抛弃memory来进行attention | DONE
+        mix_shape=mix_hidden.size()#应该是bs*1*298*(8*257)的东西
+        query_shape=query.size()#应该是bs*topk*1*298*256的东西
+        top_k=query_shape[1]
         BATCH_SIZE = mix_hidden.size()[0]
         # assert query.size()==(BATCH_SIZE,self.hidden_size)
         # assert mix_hidden.size()[-1]==self.hidden_size
         # mix_hidden：bs,max_len,fre,hidden_size  query:bs,hidden_size
-        if self.mode == 'dot':
-            # mix_hidden=mix_hidden.view(-1,1,self.hidden_size)
-            mix_shape = mix_hidden.size()
-            mix_hidden = mix_hidden.view(BATCH_SIZE, -1, self.hidden_size)
-            query = query.view(-1, self.hidden_size, 1)
-            # print '\n\n',mix_hidden.requires_grad,query.requires_grad,'\n\n'
-            dot = torch.baddbmm(Variable(torch.zeros(1, 1).cuda()), mix_hidden, query)
-            energy = dot.view(BATCH_SIZE, mix_shape[1], mix_shape[2])
-            mask = F.sigmoid(energy)
-            return mask
 
-        elif self.mode == 'align':
-            # mix_hidden=Variable(mix_hidden)
-            # query=Variable(query)
-            mix_shape = mix_hidden.size()
-            mix_hidden = mix_hidden.view(-1, self.hidden_size)
-            mix_hidden = self.Linear_1(mix_hidden).view(BATCH_SIZE, -1, self.align_hidden_size)
-            query = self.Linear_2(query).view(-1, 1, self.align_hidden_size)  # bs,1,hidden
-            sum = F.tanh(mix_hidden + query)
-            # TODO:从这里开始做起
-            energy = self.Linear_3(sum.view(-1, self.align_hidden_size)).view(BATCH_SIZE, mix_shape[1], mix_shape[2])
-            mask = F.sigmoid(energy)
-            return mask
+        mix_hidden = mix_hidden.view(BATCH_SIZE, 1,  mix_shape[2], mix_shape[3]).expand(-1,top_k,-1,-1)
+        mix_hidden = mix_hidden.view(BATCH_SIZE*top_k, mix_shape[2], mix_shape[3]) #现在mix_hidden变成了(bs*topk)*298*(8*257)
+        query=query.view(BATCH_SIZE*top_k, mix_shape[2], mix_shape[3]) #现在query变成了(bs*topk)*298*256
+        multi_moda=torch.cat((mix_hidden,query),2) #得到了拼接好的特征矩阵
 
+        multi_moda=self.lstm_layer(multi_moda)
+        for la in self.fc_layers:
+            multi_moda=F.relu(la(multi_moda))
+        print 'The size of last embedding:',multi_moda.size() #应该是(bs*topk),298,600
+        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[2],2,self.fre)
+        results=F.sigmoid(results)
+        return results
 
 class VIDEO_QUERY(nn.Module):
     def __init__(self, total_frames, video_size, spk_total_num):
@@ -208,33 +200,65 @@ class VIDEO_QUERY(nn.Module):
         out = self.Linear(last_hidden)  # 出处类别的概率,为什么很多都不加softmax的。。。
         return out, last_hidden
 
+class FACE_EMB(nn.Module):
+    def __init__(self):
+        super(FACE_EMB, self).__init__()
+        self.cnn_list=[
+            nn.Conv2d(1024,256,(7,1),stride=1,padding=(7,0),dilation=(1,1)),
+            nn.Conv2d(256,256,(5,1),stride=1,padding=(9,0),dilation=(1,1)),
+            nn.Conv2d(256,256,(5,1),stride=1,padding=(13,0),dilation=(2,1)),
+            nn.Conv2d(256,256,(5,1),stride=1,padding=(21,0),dilation=(4,1)),
+            nn.Conv2d(256,256,(5,1),stride=1,padding=(37,0),dilation=(8,1)),
+            nn.Conv2d(256,256,(5,1),stride=1,padding=(69,0),dilation=(16,1)),
+        ]
+        self.cnn_list1=[
+            nn.ConvTranspose2d(1024,256,(7,1),stride=1, dilation=(1,1)),
+            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(1,1)),
+            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(2,1)),
+            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(4,1)),
+            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(8,1)),
+            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(16,1)),
+        ]
+
+    def forward(self, x):
+        #　这个时候的输入应该是　bs*top-k*1024个通道*75帧×１
+        shape=x.size()
+        x = x.contiguous()
+        x = x.view(-1,x.size(2),x.size(3),1)
+        for idx,cnn_layer in enumerate(self.cnn_list):
+            x=F.relu(cnn_layer(x))
+            # x=F.batch_norm(x,0,1)
+            print 'speech shape after CNNs:',idx,'', x.size()
+        return x.view(shape)
 
 class MIX_SPEECH(nn.Module):
     def __init__(self):
         super(MIX_SPEECH, self).__init__()
         self.cnn_list=[
-        nn.Conv2d(2,96,(1,7),stride=1,dilation=(1,1)),
-        nn.Conv2d(96,96,(7,1),stride=1,dilation=(1,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(1,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(2,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(4,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(8,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(16,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(32,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(1,1)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(2,2)),
-        # NO.11
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(4,4)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(8,8)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(16,16)),
-        nn.Conv2d(96,96,(5,5),stride=1,dilation=(32,32)),
-        nn.Conv2d(96,8,(1,1),stride=1,dilation=(1,1))
+        nn.Conv2d(2,96,(1,7),stride=1,padding=(1,7),dilation=(1,1)),
+        nn.Conv2d(96,96,(7,1),stride=1,padding=(7,1),dilation=(1,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(9,9),dilation=(1,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(13,11),dilation=(2,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(21,13),dilation=(4,1)),
+
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(37,15),dilation=(8,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(69,17),dilation=(16,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(133,19),dilation=(32,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(135,21),dilation=(1,1)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(139,25),dilation=(2,2)),
+
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(147,33),dilation=(4,4)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(163,49),dilation=(8,8)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(195,81),dilation=(16,16)),
+        nn.Conv2d(96,96,(5,5),stride=1,padding=(259,145),dilation=(32,32)),
+        nn.Conv2d(96,8,(1,1),stride=1,padding=(259,145),dilation=(1,1))
         ]
 
     def forward(self, x):
         x = x.contiguous()
         for idx,cnn_layer in enumerate(self.cnn_list):
             x=F.relu(cnn_layer(x))
+            # x=F.batch_norm(x,0,1)
             print 'speech shape after CNNs:',idx,'', x.size()
         return x
 
@@ -301,11 +325,14 @@ def main():
     # del spk_global_gen
     # num_labels = len(spk_all_list)
 
-    print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
-    mix_hidden_layer_3d = MIX_SPEECH().cuda()
-    # mix_hidden_layer_3d(Variable(torch.rand(3,2,298,257)))
-    mix_hidden_layer_3d(Variable(torch.rand(3,2,257,298)))
+    mix_hidden_layer_3d =FACE_EMB().cuda()
+    mix_hidden_layer_3d(Variable(torch.rand(3,2,1024,75,1)))
     1/0
+    print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
+    # mix_hidden_layer_3d = MIX_SPEECH().cuda()
+    # mix_hidden_layer_3d(Variable(torch.rand(3,2,298,257)))
+    # mix_hidden_layer_3d(Variable(torch.rand(3,2,257,298)))
+    # 1/0
     mix_speech_classifier = MIX_SPEECH_classifier(speech_fre, mix_speech_len, num_labels).cuda()
     mix_speech_multiEmbedding = SPEECH_EMBEDDING(num_labels, config.EMBEDDING_SIZE,
                                                  spk_num_total + config.UNK_SPK_SUPP).cuda()
