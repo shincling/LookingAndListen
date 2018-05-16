@@ -102,6 +102,8 @@ Comm_with_Memory=True
 Comm_with_Memory=False
 # DNN/RNN隐层的维度 hidden units
 HIDDEN_UNITS = 300
+HIDDEN_UNITS = 200
+FC_UNITS = 600
 # DNN/RNN层数
 NUM_LAYERS = 2
 # Embedding大小,主要是给语音第三维那部分的
