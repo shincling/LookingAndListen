@@ -136,7 +136,7 @@ class ATTENTION(nn.Module):
         self.fre=speech_fre#应该是257
         super(ATTENTION, self).__init__()
         self.lstm_layer = nn.LSTM(
-            input_size=self.size_hidden_image,
+            input_size=(8*257+256),
             hidden_size=config.HIDDEN_UNITS,
             num_layers=config.NUM_LAYERS,
             batch_first=True,
@@ -209,7 +209,7 @@ class FACE_EMB(nn.Module):
             nn.Conv2d(256,256,(5,1),stride=1,padding=(13,0),dilation=(2,1)),
             nn.Conv2d(256,256,(5,1),stride=1,padding=(21,0),dilation=(4,1)),
             nn.Conv2d(256,256,(5,1),stride=1,padding=(37,0),dilation=(8,1)),
-            nn.Conv2d(256,256,(5,1),stride=1,padding=(69,0),dilation=(16,1)),
+            # nn.Conv2d(256,256,(5,1),stride=1,padding=(69,0),dilation=(16,1)),
         ]
         self.cnn_list1=[
             nn.ConvTranspose2d(1024,256,(7,1),stride=1, dilation=(1,1)),
@@ -220,16 +220,27 @@ class FACE_EMB(nn.Module):
             nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(16,1)),
         ]
 
+        self.cnn1=nn.Conv2d(1024,256,(7,1),stride=1,padding=(7,0),dilation=(1,1))
+        self.cnn2=nn.Conv2d(256,256,(5,1),stride=1,padding=(9,0),dilation=(1,1))
+        self.cnn3=nn.Conv2d(256,256,(5,1),stride=1,padding=(13,0),dilation=(2,1))
+        self.cnn4=nn.Conv2d(256,256,(5,1),stride=1,padding=(21,0),dilation=(4,1))
+        self.cnn5=nn.Conv2d(256,256,(5,1),stride=1,padding=(37,0),dilation=(8,1))
+        self.cnn6=nn.Conv2d(256,256,(5,1),stride=1,padding=(69,0),dilation=(16,1))
+        self.num_cnns=6
+
     def forward(self, x):
         #　这个时候的输入应该是　bs*top-k*1024个通道*75帧×１
         shape=x.size()
         x = x.contiguous()
         x = x.view(-1,x.size(2),x.size(3),1)
-        for idx,cnn_layer in enumerate(self.cnn_list):
+        for idx in range(self.num_cnns):
+            cnn_layer=eval('self.cnn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
             # x=F.batch_norm(x,0,1)
             print 'speech shape after CNNs:',idx,'', x.size()
-        return x.view(shape)
+
+        # return x.view(shape)
+        return x
 
 class MIX_SPEECH(nn.Module):
     def __init__(self):
@@ -285,16 +296,23 @@ class MIX_SPEECH_classifier(nn.Module):
         # out=self.Linear(x)
         return out
 
-class MULTI_MODAL(object):
-    def __init__(self, datasize, gen):
+class MULTI_MODAL(nn.Module):
+    def __init__(self, speech_fre):
+        super(MULTI_MODAL, self).__init__()
         print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
-        self.mix_speech_len, self.speech_fre, self.total_frames, self.spk_num_total = datasize
-        self.gen = gen
+        self.images_layer =FACE_EMB().cuda() #初始化处理各个任务的层
+        self.mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
+        self.att_layer=ATTENTION(speech_fre).cuda() #做后端的融合和输出的层
 
-    def build(self):
-        mix_hidden_layer_3d = MIX_SPEECH(self.speech_fre, self.mix_speech_len)
-        output = mix_hidden_layer_3d(Variable(torch.from_numpy(self.gen.next()[1])))
+        # print self.images_layer
+        # print self.mix_speech_layer
+        # print self.att_layer
 
+    def forward(self, mix_speech,querys):
+        mix_speech_hidden=self.mix_speech_layer(mix_speech)
+        querys_hidden=self.images_layer(querys)
+        out=self.att_layer(mix_speech_hidden,querys_hidden)
+        return out
 
 def top_k_mask(batch_pro, alpha, top_k):
     'batch_pro是 bs*n的概率分布，例如2×3的，每一行是一个概率分布\
@@ -325,31 +343,26 @@ def main():
     # del spk_global_gen
     # num_labels = len(spk_all_list)
 
-    mix_hidden_layer_3d =FACE_EMB().cuda()
-    mix_hidden_layer_3d(Variable(torch.rand(3,2,1024,75,1)))
+    # print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
+    images_layer =FACE_EMB() #初始化处理各个任务的层
+    # print images_layer.state_dict()
+    # print images_layer.parameters().next()
+    images_layer(Variable(torch.rand(3,2,1024,75,1)))
+    print images_layer.state_dict().keys()
+    # print images_layer.parameters().next()
+    1/0.
+    # mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
+    # att_layer=ATTENTION(speech_fre) #做后端的融合和输出的层
+    #
+    # print images_layer
+    # print mix_speech_layer
+    # print att_layer
+
+    print 'hhh'
+    speech_fre=257
+    model=MULTI_MODAL(speech_fre)
+    print model
     1/0
-    print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
-    # mix_hidden_layer_3d = MIX_SPEECH().cuda()
-    # mix_hidden_layer_3d(Variable(torch.rand(3,2,298,257)))
-    # mix_hidden_layer_3d(Variable(torch.rand(3,2,257,298)))
-    # 1/0
-    mix_speech_classifier = MIX_SPEECH_classifier(speech_fre, mix_speech_len, num_labels).cuda()
-    mix_speech_multiEmbedding = SPEECH_EMBEDDING(num_labels, config.EMBEDDING_SIZE,
-                                                 spk_num_total + config.UNK_SPK_SUPP).cuda()
-    print mix_hidden_layer_3d
-    print mix_speech_classifier
-
-    # This part is to conduct the video inputs.
-    query_video_layer = VIDEO_QUERY(total_frames, config.VideoSize, spk_num_total).cuda()
-    query_video_layer = None
-    print query_video_layer
-    # query_video_output,xx=query_video_layer(Variable(torch.from_numpy(data[4])))
-
-    att_layer = ATTENTION(config.EMBEDDING_SIZE, 'align').cuda()
-    att_speech_layer = ATTENTION(config.EMBEDDING_SIZE, 'align').cuda()
-
-    # del data_generator
-    # del data
 
     optimizer = torch.optim.Adam([{'params': mix_hidden_layer_3d.parameters()},
                                   {'params': mix_speech_multiEmbedding.parameters()},
