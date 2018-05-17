@@ -359,8 +359,6 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 batch_idx+=1
                 # print 'batch_dix:{}/{},'.format(batch_idx,config.BATCH_SIZE),
                 if batch_idx==config.BATCH_SIZE: #填满了一个batch
-                    #下一个batch的混合说话人个数， 先调整一下
-                    mix_k=random.sample(mix_number_list,1)[0]
                     mix_feas=np.array(mix_feas)
                     mix_phase=np.array(mix_phase)
                     aim_fea=np.array(aim_fea)
@@ -392,8 +390,11 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                'multi_spk_wav_list':multi_spk_wav_list,
                                'multi_video_list':multi_video_list,
                                'batch_total':batch_total,
+                               'top_k':mix_k
                                }
 
+                    #下一个batch的混合说话人个数， 先调整一下
+                    mix_k=random.sample(mix_number_list,1)[0]
                     batch_idx=0
                     mix_speechs=np.zeros((config.BATCH_SIZE,config.MAX_LEN_SPEECH))
                     mix_feas=[]#应该是bs,n_frames,n_fre这么多
