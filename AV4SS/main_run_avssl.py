@@ -132,8 +132,9 @@ def print_memory_state(memory):
                                                 one[2])
 
 def convert2numpy(data_list,top_k):
-    output_size=(config.BATCH_SIZE,top_k)+ np.array(data_list[0].values[0]).shape
-    output_array=np.zeros(output_size)
+    output_size=(config.BATCH_SIZE,top_k)+ np.array(data_list[0].values()[0]).shape
+    # print output_size
+    output_array=np.zeros(output_size,dtype=np.float32)
     for idx,dict_sample in enumerate(data_list):#对于这个batch里的每一个sample(是一个dict)
         spk_all=sorted(dict_sample.keys()) #将它们排序，确保统一
         for jdx,spk in enumerate(spk_all):
@@ -176,6 +177,22 @@ class ATTENTION(nn.Module):
         results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[2],2,self.fre)
         results=F.sigmoid(results)
         return results
+
+class FACE_HIDDEN(nn.Module):
+    #这个是定制的那个预训练的抽脸部特征的1024的图像层次，后面替换，目前先随便用了一层全链接
+    def __init__(self):
+        super(FACE_HIDDEN, self).__init__()
+        self.layer=nn.Linear(3*299*299,1024)
+    def forward(self, x):
+        # x是bs,topk,75,3,299,299的
+        topk=x.size()[1]
+        x=x.contiguous()
+        x=x.view(config.BATCH_SIZE,topk,75,-1)
+        x=self.layer(x) # bs,topk,75,1024
+        # x=x.view(config.BATCH_SIZE,topk,75,1024)
+        x=torch.transpose(x,2,3).contiguous().view(config.BATCH_SIZE,topk,75,1024,1)
+
+        return x
 
 
 class FACE_EMB(nn.Module):
@@ -314,10 +331,10 @@ def main():
 
     print 'hhh'
     speech_fre=257
+    face_layer=FACE_HIDDEN().cuda()
     model=MULTI_MODAL(speech_fre).cuda()
     print model
     print model.state_dict().keys()
-    1/0
 
     init_lr=0.0008
     optimizer = torch.optim.Adam([{'params':model.parameters()}], lr=init_lr)
@@ -334,18 +351,29 @@ def main():
         if epoch_idx > 0:
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx - 1, SDR_SUM.mean())
         SDR_SUM = np.array([])
-        for batch_idx in range(config.EPOCH_SIZE):
+        batch_idx=0
+        # for batch_idx in range(config.EPOCH_SIZE):
+        while True:
             print '*' * 40, epoch_idx, batch_idx, '*' * 40
             train_data_gen = prepare_data('once', 'train')
             # train_data_gen=prepare_data('once','test')
             # train_data_gen=prepare_data('once','eval_test')
             train_data = train_data_gen.next()
+            top_k_num=train_data['top_k'] #对于这个batch的top-k
+            print 'top-k this batch:',top_k_num
 
             mix_speech=Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
-            images_query=Variable(torch.from_numpy(convert2numpy(train_data['multi_video_list']))).cuda() #大小bs,topk,75,3,299,299
-            y_map=convert2numpy(train_data['multI_spk_fea_list']) #最终的map
-
+            print mix_speech.size()
+            images_query=Variable(torch.from_numpy(convert2numpy(train_data['multi_video_list'],top_k_num))).cuda() #大小bs,topk,75,3,299,299
+            print images_query.size()
+            images_query=face_layer(images_query)
+            print images_query.size()
+            y_map=convert2numpy(train_data['multi_spk_fea_list'],top_k_num) #最终的map
+            print y_map.shape
+            1/0
             predict_multi_masks=model(mix_speech,images_query)
+            print predict_multi_masks.size()
+
 
 
 
@@ -411,6 +439,8 @@ def main():
                                 top_k_sort_index)
             SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output/', 2))
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
+
+            batch_idx+=1
 
 
 if __name__ == "__main__":
