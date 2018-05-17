@@ -131,6 +131,15 @@ def print_memory_state(memory):
                                                         2 * config.EMBEDDING_SIZE - 3:2 * config.EMBEDDING_SIZE + 5],
                                                 one[2])
 
+def convert2numpy(data_list,top_k):
+    output_size=(config.BATCH_SIZE,top_k)+ np.array(data_list[0].values[0]).shape
+    output_array=np.zeros(output_size)
+    for idx,dict_sample in enumerate(data_list):#对于这个batch里的每一个sample(是一个dict)
+        spk_all=sorted(dict_sample.keys()) #将它们排序，确保统一
+        for jdx,spk in enumerate(spk_all):
+            output_array[idx,jdx]=np.array(data_list[idx][spk])
+    return output_array
+
 class ATTENTION(nn.Module):
     def __init__(self,speech_fre):
         self.fre=speech_fre#应该是257
@@ -168,37 +177,6 @@ class ATTENTION(nn.Module):
         results=F.sigmoid(results)
         return results
 
-class VIDEO_QUERY(nn.Module):
-    def __init__(self, total_frames, video_size, spk_total_num):
-        super(VIDEO_QUERY, self).__init__()
-        self.total_frames = total_frames
-        self.video_size = video_size
-        self.spk_total_num = spk_total_num
-        self.images_net = myNet.inception_v3(pretrained=True)  # 注意这个输出[2]才是最后的隐层状态
-        for para in self.images_net.parameters():
-            para.requires_grad = False
-        self.size_hidden_image = 2048  # 抽取的图像的隐层向量的长度,Inception_v3对应的是2048
-        self.lstm_layer = nn.LSTM(
-            input_size=self.size_hidden_image,
-            hidden_size=config.HIDDEN_UNITS,
-            num_layers=config.NUM_LAYERS,
-            batch_first=True,
-            bidirectional=True
-        )
-        self.dense = nn.Linear(2 * config.HIDDEN_UNITS, config.EMBEDDING_SIZE)  # 把输出的东西映射到embding_size的维度上
-        self.Linear = nn.Linear(config.EMBEDDING_SIZE, self.spk_total_num)
-
-    def forward(self, x):
-        assert x.size()[2] == 3  # 判断是否不同通道在第三个维度
-        x = x.contiguous()
-        x = x.view(-1, 3, self.video_size[0], self.video_size[1])
-        x_hidden_images = self.images_net(x)[2]
-        x_hidden_images = x_hidden_images.view(-1, self.total_frames, self.size_hidden_image)
-        x_lstm, hidden_lstm = self.lstm_layer(x_hidden_images)
-        last_hidden = self.dense(x_lstm[:, -1])
-        # out=F.softmax(self.Linear(last_hidden)) #出处类别的概率,为什么很多都不加softmax的。。。
-        out = self.Linear(last_hidden)  # 出处类别的概率,为什么很多都不加softmax的。。。
-        return out, last_hidden
 
 class FACE_EMB(nn.Module):
     def __init__(self):
@@ -274,28 +252,6 @@ class MIX_SPEECH(nn.Module):
             print 'speech shape after CNNs:',idx,'', x.size()
         return x
 
-class MIX_SPEECH_classifier(nn.Module):
-    def __init__(self, input_fre, mix_speech_len, num_labels):
-        super(MIX_SPEECH_classifier, self).__init__()
-        self.input_fre = input_fre
-        self.mix_speech_len = mix_speech_len
-        self.layer = nn.LSTM(
-            input_size=input_fre,
-            hidden_size=2 * config.HIDDEN_UNITS,
-            num_layers=3,
-            batch_first=True,
-            bidirectional=True
-        )
-        self.Linear = nn.Linear(2 * 2 * config.HIDDEN_UNITS, num_labels)
-
-    def forward(self, x):
-        x, hidden = self.layer(x)
-        x = x.contiguous()  # bs*len*600
-        # x=x.view(config.BATCH_SIZE*self.mix_speech_len,-1)
-        x = torch.mean(x, 1)
-        out = F.sigmoid(self.Linear(x))
-        # out=self.Linear(x)
-        return out
 
 class MULTI_MODAL(nn.Module):
     def __init__(self, speech_fre):
@@ -304,10 +260,6 @@ class MULTI_MODAL(nn.Module):
         self.images_layer =FACE_EMB().cuda() #初始化处理各个任务的层
         self.mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
         self.att_layer=ATTENTION(speech_fre).cuda() #做后端的融合和输出的层
-
-        # print self.images_layer
-        # print self.mix_speech_layer
-        # print self.att_layer
 
     def forward(self, mix_speech,querys):
         mix_speech_hidden=self.mix_speech_layer(mix_speech)
@@ -337,12 +289,13 @@ def main():
     print('go to model')
     print '*' * 80
 
-    # spk_global_gen = prepare_data(mode='global', train_or_test='train')  # 写一个假的数据生成，可以用来写模型先
-    # global_para = spk_global_gen.next()
-    # print global_para
-    # spk_all_list, dict_spk2idx, dict_idx2spk, mix_speech_len, speech_fre, total_frames, spk_num_total, batch_total = global_para
-    # del spk_global_gen
-    # num_labels = len(spk_all_list)
+    spk_global_gen = prepare_data(mode='global', train_or_test='train')
+    global_para = spk_global_gen.next()
+    print global_para
+    spk_all_list, dict_spk2idx, dict_idx2spk, mix_speech_len, speech_fre,\
+    total_frames, spk_num_total, batch_total = global_para
+    del spk_global_gen
+    num_labels = len(spk_all_list)
 
     # print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
     # images_layer =FACE_EMB() #初始化处理各个任务的层
@@ -361,48 +314,45 @@ def main():
 
     print 'hhh'
     speech_fre=257
-    model=MULTI_MODAL(speech_fre)
+    model=MULTI_MODAL(speech_fre).cuda()
     print model
     print model.state_dict().keys()
     1/0
 
-    optimizer = torch.optim.Adam([{'params': mix_hidden_layer_3d.parameters()},
-                                  {'params': mix_speech_multiEmbedding.parameters()},
-                                  {'params': mix_speech_classifier.parameters()},
-                                  # {'params':query_video_layer.lstm_layer.parameters()},
-                                  # {'params':query_video_layer.dense.parameters()},
-                                  # {'params':query_video_layer.Linear.parameters()},
-                                  {'params': att_layer.parameters()},
-                                  {'params': att_speech_layer.parameters()},
-                                  # ], lr=0.02,momentum=0.9)
-                                  ], lr=0.00005)
-    if 1 and config.Load_param:
-        mix_speech_classifier.load_state_dict(torch.load('params/param_speech_123onezeroag4_WSJ0_multilabel_epoch70'))
-        att_speech_layer.load_state_dict(
-            torch.load('params/param_mix2_db2dropout_WSJ0_attlayer_90', map_location={'cuda:1': 'cuda:0'}))
-        mix_hidden_layer_3d.load_state_dict(
-            torch.load('params/param_mix2_db2dropout_WSJ0_hidden3d_90', map_location={'cuda:1': 'cuda:0'}))
-        mix_speech_multiEmbedding.load_state_dict(
-            torch.load('params/param_mix2_db2dropout_WSJ0_emblayer_90', map_location={'cuda:1': 'cuda:0'}))
+    init_lr=0.0008
+    optimizer = torch.optim.Adam([{'params':model.parameters()}], lr=init_lr)
+    if 0 and config.Load_param:
+        params_path='sss'
+        model.load_state_dict(torch.load(params_path))
+        print 'Params:',params_path, 'loaded successfully~!\n'
 
     loss_func = torch.nn.MSELoss()  # the target label is NOT an one-hotted
     loss_multi_func = torch.nn.MSELoss()  # the target label is NOT an one-hotted
-    # loss_multi_func = torch.nn.L1Loss()  # the target label is NOT an one-hotted
-    loss_query_class = torch.nn.CrossEntropyLoss()
 
     print '''Begin to calculate.'''
     for epoch_idx in range(config.MAX_EPOCH):
         if epoch_idx > 0:
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx - 1, SDR_SUM.mean())
         SDR_SUM = np.array([])
-        # print_memory_state(memory.memory)
-        print 'SDR_SUM for epoch {}:{}'.format(epoch_idx - 1, SDR_SUM.mean())
         for batch_idx in range(config.EPOCH_SIZE):
             print '*' * 40, epoch_idx, batch_idx, '*' * 40
             train_data_gen = prepare_data('once', 'train')
             # train_data_gen=prepare_data('once','test')
             # train_data_gen=prepare_data('once','eval_test')
             train_data = train_data_gen.next()
+
+            mix_speech=Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
+            images_query=Variable(torch.from_numpy(convert2numpy(train_data['multi_video_list']))).cuda() #大小bs,topk,75,3,299,299
+            y_map=convert2numpy(train_data['multI_spk_fea_list']) #最终的map
+
+            predict_multi_masks=model(mix_speech,images_query)
+
+
+
+
+
+
+
 
             '''混合语音len,fre,Emb 3D表示层'''
             mix_speech_hidden = mix_hidden_layer_3d(Variable(torch.from_numpy(train_data['mix_feas'])).cuda())
