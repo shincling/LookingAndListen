@@ -174,7 +174,7 @@ class ATTENTION(nn.Module):
         for la in self.fc_layers:
             multi_moda=F.relu(la(multi_moda))
         print 'The size of last embedding:',multi_moda.size() #应该是(bs*topk),298,600
-        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[2],2,self.fre)
+        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[2],self.fre,2)
         results=F.sigmoid(results)
         return results
 
@@ -224,6 +224,7 @@ class FACE_EMB(nn.Module):
         self.num_cnns=6
 
     def forward(self, x):
+        print '\n Face layer log:'
         #　这个时候的输入应该是　bs*top-k*1024个通道*75帧×１
         shape=x.size()
         x = x.contiguous()
@@ -232,7 +233,7 @@ class FACE_EMB(nn.Module):
             cnn_layer=eval('self.cnn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
             # x=F.batch_norm(x,0,1)
-            print 'speech shape after CNNs:',idx,'', x.size()
+            print 'Face shape after CNNs:',idx,'', x.size()
 
         # return x.view(shape)
         return x
@@ -261,6 +262,7 @@ class MIX_SPEECH(nn.Module):
         self.num_cnns=15
 
     def forward(self, x):
+        print '\nSpeech layer log:'
         x = x.contiguous()
         for idx in range(self.num_cnns):
             cnn_layer=eval('self.cnn{}'.format(idx+1))
@@ -323,6 +325,7 @@ def main():
     # print images_layer.parameters().next()
     # 1/0.
     # mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
+    # mix_speech_layer(Variable(torch.rand(3,2,298,257)))
     # att_layer=ATTENTION(speech_fre) #做后端的融合和输出的层
     #
     # print images_layer
@@ -363,23 +366,19 @@ def main():
             print 'top-k this batch:',top_k_num
 
             mix_speech=Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
-            print mix_speech.size()
+            mix_speech=torch.transpose(mix_speech,1,3)
+            mix_speech=torch.transpose(mix_speech,2,3)
+            # (2L, 301L, 257L, 2L) >>> (2L, 2L, 301L, 257L)
+            print 'mix_speech_shape:',mix_speech.size()
+
             images_query=Variable(torch.from_numpy(convert2numpy(train_data['multi_video_list'],top_k_num))).cuda() #大小bs,topk,75,3,299,299
-            print images_query.size()
+            print 'images_query_shape:',images_query.size()
             images_query=face_layer(images_query)
-            print images_query.size()
+            print 'images_query_embeddings_shape:',images_query.size()
             y_map=convert2numpy(train_data['multi_spk_fea_list'],top_k_num) #最终的map
-            print y_map.shape
-            1/0
+            print 'final map shape:',y_map.shape
             predict_multi_masks=model(mix_speech,images_query)
-            print predict_multi_masks.size()
-
-
-
-
-
-
-
+            print 'predict results shape:',predict_multi_masks.size()
 
 
             '''混合语音len,fre,Emb 3D表示层'''
