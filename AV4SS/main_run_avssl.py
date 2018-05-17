@@ -246,22 +246,22 @@ class MIX_SPEECH(nn.Module):
     def __init__(self):
         super(MIX_SPEECH, self).__init__()
 
-        self.cnn1=nn.Conv2d(2,96,(1,7),stride=1,padding=(1,7),dilation=(1,1)),
-        self.cnn2=nn.Conv2d(96,96,(7,1),stride=1,padding=(7,1),dilation=(1,1)),
-        self.cnn3=nn.Conv2d(96,96,(5,5),stride=1,padding=(9,9),dilation=(1,1)),
-        self.cnn4=nn.Conv2d(96,96,(5,5),stride=1,padding=(13,11),dilation=(2,1)),
-        self.cnn5=nn.Conv2d(96,96,(5,5),stride=1,padding=(21,13),dilation=(4,1)),
+        self.cnn1=nn.Conv2d(2,96,(1,7),stride=1,padding=(1,7),dilation=(1,1))
+        self.cnn2=nn.Conv2d(96,96,(7,1),stride=1,padding=(7,1),dilation=(1,1))
+        self.cnn3=nn.Conv2d(96,96,(5,5),stride=1,padding=(9,9),dilation=(1,1))
+        self.cnn4=nn.Conv2d(96,96,(5,5),stride=1,padding=(13,11),dilation=(2,1))
+        self.cnn5=nn.Conv2d(96,96,(5,5),stride=1,padding=(21,13),dilation=(4,1))
 
-        self.cnn6=nn.Conv2d(96,96,(5,5),stride=1,padding=(37,15),dilation=(8,1)),
-        self.cnn7=nn.Conv2d(96,96,(5,5),stride=1,padding=(69,17),dilation=(16,1)),
-        self.cnn8=nn.Conv2d(96,96,(5,5),stride=1,padding=(133,19),dilation=(32,1)),
-        self.cnn9=nn.Conv2d(96,96,(5,5),stride=1,padding=(135,21),dilation=(1,1)),
-        self.cnn10=nn.Conv2d(96,96,(5,5),stride=1,padding=(139,25),dilation=(2,2)),
+        self.cnn6=nn.Conv2d(96,96,(5,5),stride=1,padding=(37,15),dilation=(8,1))
+        self.cnn7=nn.Conv2d(96,96,(5,5),stride=1,padding=(69,17),dilation=(16,1))
+        self.cnn8=nn.Conv2d(96,96,(5,5),stride=1,padding=(133,19),dilation=(32,1))
+        self.cnn9=nn.Conv2d(96,96,(5,5),stride=1,padding=(135,21),dilation=(1,1))
+        self.cnn10=nn.Conv2d(96,96,(5,5),stride=1,padding=(139,25),dilation=(2,2))
 
-        self.cnn11=nn.Conv2d(96,96,(5,5),stride=1,padding=(147,33),dilation=(4,4)),
-        self.cnn12=nn.Conv2d(96,96,(5,5),stride=1,padding=(163,49),dilation=(8,8)),
-        self.cnn13=nn.Conv2d(96,96,(5,5),stride=1,padding=(195,81),dilation=(16,16)),
-        self.cnn14=nn.Conv2d(96,96,(5,5),stride=1,padding=(259,145),dilation=(32,32)),
+        self.cnn11=nn.Conv2d(96,96,(5,5),stride=1,padding=(147,33),dilation=(4,4))
+        self.cnn12=nn.Conv2d(96,96,(5,5),stride=1,padding=(163,49),dilation=(8,8))
+        self.cnn13=nn.Conv2d(96,96,(5,5),stride=1,padding=(195,81),dilation=(16,16))
+        self.cnn14=nn.Conv2d(96,96,(5,5),stride=1,padding=(259,145),dilation=(32,32))
         self.cnn15=nn.Conv2d(96,8,(1,1),stride=1,padding=(259,145),dilation=(1,1))
         self.num_cnns=15
 
@@ -345,13 +345,13 @@ def main():
     # num_labels = len(spk_all_list)
 
     # print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
-    images_layer =FACE_EMB() #初始化处理各个任务的层
+    # images_layer =FACE_EMB() #初始化处理各个任务的层
     # print images_layer.state_dict()
     # print images_layer.parameters().next()
-    images_layer(Variable(torch.rand(3,2,1024,75,1)))
-    print images_layer.state_dict().keys()
+    # images_layer(Variable(torch.rand(3,2,1024,75,1)))
+    # print images_layer.state_dict().keys()
     # print images_layer.parameters().next()
-    1/0.
+    # 1/0.
     # mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
     # att_layer=ATTENTION(speech_fre) #做后端的融合和输出的层
     #
@@ -363,6 +363,7 @@ def main():
     speech_fre=257
     model=MULTI_MODAL(speech_fre)
     print model
+    print model.state_dict().keys()
     1/0
 
     optimizer = torch.optim.Adam([{'params': mix_hidden_layer_3d.parameters()},
