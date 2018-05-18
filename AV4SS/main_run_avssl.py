@@ -37,6 +37,7 @@ random.seed(1)
 test_all_outputchannel = 0
 
 def interpolate(var,size,axis=1):
+    # 要求输入是二维图像，插值的是后面的这一个维度！
     # cc=Variable(torch.random(6*256,75),requires_grad=True)
     # var=cc
     shape=var.size()
@@ -155,7 +156,7 @@ def convert2numpy(data_list,top_k):
 
 class ATTENTION(nn.Module):
     def __init__(self,speech_fre):
-        self.fre=speech_fre#应该是257
+        self.fre=speech_fre#应该是301
         super(ATTENTION, self).__init__()
         self.lstm_layer = nn.LSTM(
             input_size=(8*257+256),
@@ -231,7 +232,9 @@ class FACE_EMB(nn.Module):
             # x=F.batch_norm(x,0,1)
             print 'Face shape after CNNs:',idx,'', x.size()
 
+        #　到这里是(bs*topk, 256L, 75L, 1L)
         x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
+        #　到这里插值过后是（bs*topk*256,fre)
         x=torch.transpose(x.view(config.BATCH_SIZE,shape[1],256,self.fre),2,3).contiguous()
         return x.view(config.BATCH_SIZE,shape[1],self.fre,256)
 
@@ -279,6 +282,7 @@ class MULTI_MODAL(nn.Module):
 
     def forward(self, mix_speech,querys):
         mix_speech_hidden=self.mix_speech_layer(mix_speech)
+        # Todo:这里要经过一个变化，把８×２５７弄成一个维的
         querys_hidden=self.images_layer(querys)
         out=self.att_layer(mix_speech_hidden,querys_hidden)
         return out
@@ -332,6 +336,7 @@ def main():
     print 'hhh'
     speech_fre=257
     face_layer=FACE_HIDDEN().cuda()
+
     model=MULTI_MODAL(speech_fre).cuda()
     print model
     print model.state_dict().keys()
