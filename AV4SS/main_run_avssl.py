@@ -190,7 +190,7 @@ class FACE_HIDDEN(nn.Module):
         x=x.view(config.BATCH_SIZE,topk,75,-1)
         x=self.layer(x) # bs,topk,75,1024
         # x=x.view(config.BATCH_SIZE,topk,75,1024)
-        x=torch.transpose(x,2,3).contiguous().view(config.BATCH_SIZE,topk,75,1024,1)
+        x=torch.transpose(x,2,3).contiguous().view(config.BATCH_SIZE,topk,1024,75,1)
 
         return x
 
@@ -198,29 +198,12 @@ class FACE_HIDDEN(nn.Module):
 class FACE_EMB(nn.Module):
     def __init__(self):
         super(FACE_EMB, self).__init__()
-        self.cnn_list=[
-            nn.Conv2d(1024,256,(7,1),stride=1,padding=(7,0),dilation=(1,1)),
-            nn.Conv2d(256,256,(5,1),stride=1,padding=(9,0),dilation=(1,1)),
-            nn.Conv2d(256,256,(5,1),stride=1,padding=(13,0),dilation=(2,1)),
-            nn.Conv2d(256,256,(5,1),stride=1,padding=(21,0),dilation=(4,1)),
-            nn.Conv2d(256,256,(5,1),stride=1,padding=(37,0),dilation=(8,1)),
-            # nn.Conv2d(256,256,(5,1),stride=1,padding=(69,0),dilation=(16,1)),
-        ]
-        self.cnn_list1=[
-            nn.ConvTranspose2d(1024,256,(7,1),stride=1, dilation=(1,1)),
-            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(1,1)),
-            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(2,1)),
-            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(4,1)),
-            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(8,1)),
-            nn.ConvTranspose2d(256,256,(5,1),stride=1, dilation=(16,1)),
-        ]
-
-        self.cnn1=nn.Conv2d(1024,256,(7,1),stride=1,padding=(7,0),dilation=(1,1))
-        self.cnn2=nn.Conv2d(256,256,(5,1),stride=1,padding=(9,0),dilation=(1,1))
-        self.cnn3=nn.Conv2d(256,256,(5,1),stride=1,padding=(13,0),dilation=(2,1))
-        self.cnn4=nn.Conv2d(256,256,(5,1),stride=1,padding=(21,0),dilation=(4,1))
-        self.cnn5=nn.Conv2d(256,256,(5,1),stride=1,padding=(37,0),dilation=(8,1))
-        self.cnn6=nn.Conv2d(256,256,(5,1),stride=1,padding=(69,0),dilation=(16,1))
+        self.cnn1=nn.Conv2d(1024,256,(7,1),stride=1,padding=(3,0),dilation=(1,1))
+        self.cnn2=nn.Conv2d(256,256,(5,1),stride=1,padding=(2,0),dilation=(1,1))
+        self.cnn3=nn.Conv2d(256,256,(5,1),stride=1,padding=(4,0),dilation=(2,1))
+        self.cnn4=nn.Conv2d(256,256,(5,1),stride=1,padding=(8,0),dilation=(4,1))
+        self.cnn5=nn.Conv2d(256,256,(5,1),stride=1,padding=(16,0),dilation=(8,1))
+        self.cnn6=nn.Conv2d(256,256,(5,1),stride=1,padding=(32,0),dilation=(16,1))
         self.num_cnns=6
 
     def forward(self, x):
@@ -235,30 +218,30 @@ class FACE_EMB(nn.Module):
             # x=F.batch_norm(x,0,1)
             print 'Face shape after CNNs:',idx,'', x.size()
 
-        # return x.view(shape)
-        return x
+        return x.view(shape)
+        # return x
 
 class MIX_SPEECH(nn.Module):
     def __init__(self):
         super(MIX_SPEECH, self).__init__()
 
-        self.cnn1=nn.Conv2d(2,96,(1,7),stride=1,padding=(1,7),dilation=(1,1))
-        self.cnn2=nn.Conv2d(96,96,(7,1),stride=1,padding=(7,1),dilation=(1,1))
-        self.cnn3=nn.Conv2d(96,96,(5,5),stride=1,padding=(9,9),dilation=(1,1))
-        self.cnn4=nn.Conv2d(96,96,(5,5),stride=1,padding=(13,11),dilation=(2,1))
-        self.cnn5=nn.Conv2d(96,96,(5,5),stride=1,padding=(21,13),dilation=(4,1))
+        self.cnn1=nn.Conv2d(2,96,(1,7),stride=1,padding=(0,3),dilation=(1,1))
+        self.cnn2=nn.Conv2d(96,96,(7,1),stride=1,padding=(3,0),dilation=(1,1))
+        self.cnn3=nn.Conv2d(96,96,(5,5),stride=1,padding=(2,2),dilation=(1,1))
+        self.cnn4=nn.Conv2d(96,96,(5,5),stride=1,padding=(4,2),dilation=(2,1))
+        self.cnn5=nn.Conv2d(96,96,(5,5),stride=1,padding=(8,2),dilation=(4,1))
 
-        self.cnn6=nn.Conv2d(96,96,(5,5),stride=1,padding=(37,15),dilation=(8,1))
-        self.cnn7=nn.Conv2d(96,96,(5,5),stride=1,padding=(69,17),dilation=(16,1))
-        self.cnn8=nn.Conv2d(96,96,(5,5),stride=1,padding=(133,19),dilation=(32,1))
-        self.cnn9=nn.Conv2d(96,96,(5,5),stride=1,padding=(135,21),dilation=(1,1))
-        self.cnn10=nn.Conv2d(96,96,(5,5),stride=1,padding=(139,25),dilation=(2,2))
+        self.cnn6=nn.Conv2d(96,96,(5,5),stride=1,padding=(16,2),dilation=(8,1))
+        self.cnn7=nn.Conv2d(96,96,(5,5),stride=1,padding=(32,2),dilation=(16,1))
+        self.cnn8=nn.Conv2d(96,96,(5,5),stride=1,padding=(64,2),dilation=(32,1))
+        self.cnn9=nn.Conv2d(96,96,(5,5),stride=1,padding=(2,2),dilation=(1,1))
+        self.cnn10=nn.Conv2d(96,96,(5,5),stride=1,padding=(4,4),dilation=(2,2))
 
-        self.cnn11=nn.Conv2d(96,96,(5,5),stride=1,padding=(147,33),dilation=(4,4))
-        self.cnn12=nn.Conv2d(96,96,(5,5),stride=1,padding=(163,49),dilation=(8,8))
-        self.cnn13=nn.Conv2d(96,96,(5,5),stride=1,padding=(195,81),dilation=(16,16))
-        self.cnn14=nn.Conv2d(96,96,(5,5),stride=1,padding=(259,145),dilation=(32,32))
-        self.cnn15=nn.Conv2d(96,8,(1,1),stride=1,padding=(259,145),dilation=(1,1))
+        self.cnn11=nn.Conv2d(96,96,(5,5),stride=1,padding=(8,8),dilation=(4,4))
+        self.cnn12=nn.Conv2d(96,96,(5,5),stride=1,padding=(16,16),dilation=(8,8))
+        self.cnn13=nn.Conv2d(96,96,(5,5),stride=1,padding=(32,32),dilation=(16,16))
+        self.cnn14=nn.Conv2d(96,96,(5,5),stride=1,padding=(64,64),dilation=(32,32))
+        self.cnn15=nn.Conv2d(96,8,(1,1),stride=1,padding=(0,0),dilation=(1,1))
         self.num_cnns=15
 
     def forward(self, x):
@@ -308,24 +291,24 @@ def main():
     print('go to model')
     print '*' * 80
 
-    spk_global_gen = prepare_data(mode='global', train_or_test='train')
-    global_para = spk_global_gen.next()
-    print global_para
-    spk_all_list, dict_spk2idx, dict_idx2spk, mix_speech_len, speech_fre,\
-    total_frames, spk_num_total, batch_total = global_para
-    del spk_global_gen
-    num_labels = len(spk_all_list)
+    # spk_global_gen = prepare_data(mode='global', train_or_test='train')
+    # global_para = spk_global_gen.next()
+    # print global_para
+    # spk_all_list, dict_spk2idx, dict_idx2spk, mix_speech_len, speech_fre,\
+    # total_frames, spk_num_total, batch_total = global_para
+    # del spk_global_gen
+    # num_labels = len(spk_all_list)
 
     # print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
     # images_layer =FACE_EMB() #初始化处理各个任务的层
+    # images_layer(Variable(torch.rand(3,2,1024,75,1)))
     # print images_layer.state_dict()
     # print images_layer.parameters().next()
-    # images_layer(Variable(torch.rand(3,2,1024,75,1)))
     # print images_layer.state_dict().keys()
     # print images_layer.parameters().next()
-    # 1/0.
-    # mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
-    # mix_speech_layer(Variable(torch.rand(3,2,298,257)))
+    mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
+    mix_speech_layer(Variable(torch.rand(3,2,301,257)).cuda())
+    1/0.
     # att_layer=ATTENTION(speech_fre) #做后端的融合和输出的层
     #
     # print images_layer
@@ -380,49 +363,6 @@ def main():
             predict_multi_masks=model(mix_speech,images_query)
             print 'predict results shape:',predict_multi_masks.size()
 
-
-            '''混合语音len,fre,Emb 3D表示层'''
-            mix_speech_hidden = mix_hidden_layer_3d(Variable(torch.from_numpy(train_data['mix_feas'])).cuda())
-            # 暂时关掉video部分,因为s2 s3 s4 的视频数据不全暂时
-
-            '''Speech self Sepration　语音自分离部分'''
-            mix_speech_output = mix_speech_classifier(Variable(torch.from_numpy(train_data['mix_feas'])).cuda())
-            # 从数据里得到ground truth的说话人名字和vector
-            y_spk_list = [one.keys() for one in train_data['multi_spk_fea_list']]
-            y_spk_list = train_data['multi_spk_fea_list']
-            y_spk_gtruth, y_map_gtruth = multi_label_vector(y_spk_list, dict_spk2idx)
-            # 如果训练阶段使用Ground truth的分离结果作为判别
-            if 1 and config.Ground_truth:
-                mix_speech_output = Variable(torch.from_numpy(y_map_gtruth)).cuda()
-                if 0 and test_all_outputchannel:  # 把输入的mask改成全１，可以用来测试输出所有的channel
-                    mix_speech_output = Variable(torch.ones(config.BATCH_SIZE, num_labels, ))
-                    y_map_gtruth = np.ones([config.BATCH_SIZE, num_labels])
-
-            max_num_labels = 2
-            top_k_mask_mixspeech, top_k_sort_index = top_k_mask(mix_speech_output, alpha=-0.5,
-                                                                top_k=max_num_labels)  # torch.Float型的
-            top_k_mask_idx = [np.where(line == 1)[0] for line in top_k_mask_mixspeech.numpy()]
-            mix_speech_multiEmbs = mix_speech_multiEmbedding(top_k_mask_mixspeech,
-                                                             top_k_mask_idx)  # bs*num_labels（最多混合人个数）×Embedding的大小
-
-            assert len(top_k_mask_idx[0]) == len(top_k_mask_idx[-1])
-            top_k_num = len(top_k_mask_idx[0])
-
-            # 需要计算：mix_speech_hidden[bs,len,fre,emb]和mix_mulEmbedding[bs,num_labels,EMB]的Ａttention
-            # 把　前者扩充为bs*num_labels,XXXXXXXXX的，后者也是，然后用ＡＴＴ函数计算它们再转回来就好了　
-            mix_speech_hidden_5d = mix_speech_hidden.view(config.BATCH_SIZE, 1, mix_speech_len, speech_fre,
-                                                          config.EMBEDDING_SIZE)
-            mix_speech_hidden_5d = mix_speech_hidden_5d.expand(config.BATCH_SIZE, top_k_num, mix_speech_len, speech_fre,
-                                                               config.EMBEDDING_SIZE).contiguous()
-            mix_speech_hidden_5d_last = mix_speech_hidden_5d.view(-1, mix_speech_len, speech_fre, config.EMBEDDING_SIZE)
-            # att_speech_layer=ATTENTION(config.EMBEDDING_SIZE,'align').cuda()
-            att_speech_layer = ATTENTION(config.EMBEDDING_SIZE, 'dot').cuda()
-            att_multi_speech = att_speech_layer(mix_speech_hidden_5d_last,
-                                                mix_speech_multiEmbs.view(-1, config.EMBEDDING_SIZE))
-            # print att_multi_speech.size()
-            att_multi_speech = att_multi_speech.view(config.BATCH_SIZE, top_k_num, mix_speech_len,
-                                                     speech_fre)  # bs,num_labels,len,fre这个东西
-            # print att_multi_speech.size()
             multi_mask = att_multi_speech
             # top_k_mask_mixspeech_multi=top_k_mask_mixspeech.view(config.BATCH_SIZE,top_k_num,1,1).expand(config.BATCH_SIZE,top_k_num,mix_speech_len,speech_fre)
             # multi_mask=multi_mask*Variable(top_k_mask_mixspeech_multi).cuda()
