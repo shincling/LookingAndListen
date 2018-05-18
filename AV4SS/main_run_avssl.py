@@ -16,6 +16,9 @@ import shutil
 import librosa
 import soundfile as sf
 
+import scipy.interpolate as inter
+
+
 # import matlab
 # import matlab.engine
 # from separation import bss_eval_sources
@@ -33,6 +36,15 @@ random.seed(1)
 # logfile=config.LOG_FILE_PRE
 test_all_outputchannel = 0
 
+def interpolate(var,size,axis=1):
+    # cc=Variable(torch.random(6*256,75),requires_grad=True)
+    # var=cc
+    shape=var.size()
+    assert len(shape)==2
+    out_var=Variable(torch.zeros(shape[0],size),requires_grad=0)
+    for i in range(size):
+        out_var[:,i]=var[:,i*shape[1]/size]
+    return out_var.view(shape[0],size)
 
 def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk, data, sort_idx):
     if config.Out_Sep_Result:
@@ -196,7 +208,8 @@ class FACE_HIDDEN(nn.Module):
 
 
 class FACE_EMB(nn.Module):
-    def __init__(self):
+    def __init__(self,fre=301):
+        self.fre=fre
         super(FACE_EMB, self).__init__()
         self.cnn1=nn.Conv2d(1024,256,(7,1),stride=1,padding=(3,0),dilation=(1,1))
         self.cnn2=nn.Conv2d(256,256,(5,1),stride=1,padding=(2,0),dilation=(1,1))
@@ -218,8 +231,9 @@ class FACE_EMB(nn.Module):
             # x=F.batch_norm(x,0,1)
             print 'Face shape after CNNs:',idx,'', x.size()
 
-        return x.view(shape)
-        # return x
+        x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
+        x=torch.transpose(x.view(config.BATCH_SIZE,shape[1],256,self.fre),2,3).contiguous()
+        return x.view(config.BATCH_SIZE,shape[1],self.fre,256)
 
 class MIX_SPEECH(nn.Module):
     def __init__(self):
@@ -300,15 +314,15 @@ def main():
     # num_labels = len(spk_all_list)
 
     # print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
-    # images_layer =FACE_EMB() #初始化处理各个任务的层
-    # images_layer(Variable(torch.rand(3,2,1024,75,1)))
+    images_layer =FACE_EMB() #初始化处理各个任务的层
+    images_layer(Variable(torch.rand(2,3,1024,75,1),requires_grad=True))
     # print images_layer.state_dict()
     # print images_layer.parameters().next()
     # print images_layer.state_dict().keys()
     # print images_layer.parameters().next()
-    mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
-    mix_speech_layer(Variable(torch.rand(3,2,301,257)).cuda())
-    1/0.
+    # mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
+    # mix_speech_layer(Variable(torch.rand(3,2,301,257)).cuda())
+    # 1/0.
     # att_layer=ATTENTION(speech_fre) #做后端的融合和输出的层
     #
     # print images_layer
@@ -362,6 +376,7 @@ def main():
             print 'final map shape:',y_map.shape
             predict_multi_masks=model(mix_speech,images_query)
             print 'predict results shape:',predict_multi_masks.size()
+            1/0
 
             multi_mask = att_multi_speech
             # top_k_mask_mixspeech_multi=top_k_mask_mixspeech.view(config.BATCH_SIZE,top_k_num,1,1).expand(config.BATCH_SIZE,top_k_num,mix_speech_len,speech_fre)
