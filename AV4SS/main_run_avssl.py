@@ -165,29 +165,36 @@ class ATTENTION(nn.Module):
             batch_first=True,
             bidirectional=True
         )
-        self.fc_layers=[nn.Linear(2*config.HIDDEN_UNITS,config.FC_UNITS) for i in range(3)]
+        self.fc_layers1=nn.Linear(2*config.HIDDEN_UNITS,config.FC_UNITS)
+        self.fc_layers2=nn.Linear(config.FC_UNITS,config.FC_UNITS)
+        self.fc_layers3=nn.Linear(config.FC_UNITS,config.FC_UNITS)
         self.final_layer=nn.Linear(config.FC_UNITS,speech_fre*2)
 
     def forward(self, mix_hidden, query):
         # todo:这个要弄好，其实也可以直接抛弃memory来进行attention | DONE
-        mix_shape=mix_hidden.size()#应该是bs*1*298*(8*257)的东西
-        query_shape=query.size()#应该是bs*topk*1*298*256的东西
+        mix_shape=mix_hidden.size()#应该是bs*301*(8*257)的东西
+        query_shape=query.size()#应该是bs*topk*301*256的东西
         top_k=query_shape[1]
         BATCH_SIZE = mix_hidden.size()[0]
         # assert query.size()==(BATCH_SIZE,self.hidden_size)
         # assert mix_hidden.size()[-1]==self.hidden_size
         # mix_hidden：bs,max_len,fre,hidden_size  query:bs,hidden_size
 
-        mix_hidden = mix_hidden.view(BATCH_SIZE, 1,  mix_shape[2], mix_shape[3]).expand(-1,top_k,-1,-1)
-        mix_hidden = mix_hidden.view(BATCH_SIZE*top_k, mix_shape[2], mix_shape[3]) #现在mix_hidden变成了(bs*topk)*298*(8*257)
-        query=query.view(BATCH_SIZE*top_k, mix_shape[2], mix_shape[3]) #现在query变成了(bs*topk)*298*256
-        multi_moda=torch.cat((mix_hidden,query),2) #得到了拼接好的特征矩阵
+        mix_hidden = mix_hidden.view(BATCH_SIZE, 1,  mix_shape[1], mix_shape[2]).expand(BATCH_SIZE,top_k,mix_shape[1],mix_shape[2])
+        mix_hidden = mix_hidden.contiguous().view(BATCH_SIZE*top_k, mix_shape[1], mix_shape[2]) #现在mix_hidden变成了(bs*topk)*301*(8*257)
+        query=query.view(BATCH_SIZE*top_k,query_shape[2],query_shape[3]) #现在query变成了(bs*topk)*301*256
+        # print mix_hidden
+        # print '\n',query
+        multi_moda=torch.cat((mix_hidden,query),dim=2) #得到了拼接好的特征矩阵
 
-        multi_moda=self.lstm_layer(multi_moda)
-        for la in self.fc_layers:
-            multi_moda=F.relu(la(multi_moda))
-        print 'The size of last embedding:',multi_moda.size() #应该是(bs*topk),298,600
-        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[2],self.fre,2)
+        multi_moda=self.lstm_layer(multi_moda)[0]
+        print 'after the lstm size:',multi_moda.size()
+        multi_moda=F.relu(self.fc_layers1(multi_moda))
+        multi_moda=F.relu(self.fc_layers2(multi_moda))
+        multi_moda=F.relu(self.fc_layers3(multi_moda))
+
+        print 'The size of last embedding:',multi_moda.size() #应该是(bs*topk),301,600
+        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[1],self.fre,2)
         results=F.sigmoid(results)
         return results
 
@@ -235,7 +242,7 @@ class FACE_EMB(nn.Module):
         #　到这里是(bs*topk, 256L, 75L, 1L)
         x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
         #　到这里插值过后是（bs*topk*256,fre)
-        x=torch.transpose(x.view(config.BATCH_SIZE,shape[1],256,self.fre),2,3).contiguous()
+        x=torch.transpose(x.view(config.BATCH_SIZE,shape[1],256,self.fre),2,3).contiguous().cuda()
         return x.view(config.BATCH_SIZE,shape[1],self.fre,256)
 
 class MIX_SPEECH(nn.Module):
@@ -275,13 +282,15 @@ class MIX_SPEECH(nn.Module):
 class MULTI_MODAL(nn.Module):
     def __init__(self, speech_fre):
         super(MULTI_MODAL, self).__init__()
+        self.fre=speech_fre
         print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
         self.images_layer =FACE_EMB().cuda() #初始化处理各个任务的层
         self.mix_speech_layer = MIX_SPEECH().cuda()#初始化处理混合语音的层
         self.att_layer=ATTENTION(speech_fre).cuda() #做后端的融合和输出的层
 
     def forward(self, mix_speech,querys):
-        mix_speech_hidden=self.mix_speech_layer(mix_speech)
+        mix_speech_hidden=self.mix_speech_layer(mix_speech)#bs,8,301,257
+        mix_speech_hidden=torch.transpose(mix_speech_hidden,1,2).contiguous().view(config.BATCH_SIZE,self.fre,-1)
         # Todo:这里要经过一个变化，把８×２５７弄成一个维的
         querys_hidden=self.images_layer(querys)
         out=self.att_layer(mix_speech_hidden,querys_hidden)
@@ -309,17 +318,17 @@ def main():
     print('go to model')
     print '*' * 80
 
-    # spk_global_gen = prepare_data(mode='global', train_or_test='train')
-    # global_para = spk_global_gen.next()
-    # print global_para
-    # spk_all_list, dict_spk2idx, dict_idx2spk, mix_speech_len, speech_fre,\
-    # total_frames, spk_num_total, batch_total = global_para
-    # del spk_global_gen
-    # num_labels = len(spk_all_list)
+    spk_global_gen = prepare_data(mode='global', train_or_test='train')
+    global_para = spk_global_gen.next()
+    print global_para
+    spk_all_list, dict_spk2idx, dict_idx2spk,speech_fre, mix_speech_len,\
+    total_frames, spk_num_total, batch_total = global_para
+    del spk_global_gen
+    num_labels = len(spk_all_list)
 
     # print 'Begin to build the maim model for Multi_Modal Cocktail Problem.'
-    images_layer =FACE_EMB() #初始化处理各个任务的层
-    images_layer(Variable(torch.rand(2,3,1024,75,1),requires_grad=True))
+    # images_layer =FACE_EMB() #初始化处理各个任务的层
+    # images_layer(Variable(torch.rand(2,3,1024,75,1),requires_grad=True))
     # print images_layer.state_dict()
     # print images_layer.parameters().next()
     # print images_layer.state_dict().keys()
@@ -334,7 +343,7 @@ def main():
     # print att_layer
 
     print 'hhh'
-    speech_fre=257
+    # speech_fre=257
     face_layer=FACE_HIDDEN().cuda()
 
     model=MULTI_MODAL(speech_fre).cuda()
