@@ -401,16 +401,24 @@ def main():
             predict_multi_masks_fake=predict_multi_masks[:,:,:,:,1]
             mix_speech_real=mix_speech_multi[:,:,:,:,0]
             mix_speech_fake=mix_speech_multi[:,:,:,:,1]
-            y_map_real=y_map[:,:,:,:,0]
-            y_map_fake=y_map[:,:,:,:,1]
+            y_map_real=Variable(torch.from_numpy(y_map[:,:,:,:,0])).cuda()
+            y_map_fake=Variable(torch.from_numpy(y_map[:,:,:,:,1])).cuda()
 
             predict_real=predict_multi_masks_real*mix_speech_real-predict_multi_masks_fake*mix_speech_fake
             predict_fake=predict_multi_masks_real*mix_speech_fake+predict_multi_masks_fake*mix_speech_real
             print 'predict real/fake size:',predict_real.size()
 
-            # loss_real=loss_func()
+            loss_real=loss_func(predict_real,y_map_real)
+            loss_fake=loss_func(predict_fake,y_map_fake)
+            loss_all=loss_real+loss_fake
+            print 'loss:',loss_real.data[0],loss_fake.data[0]
 
 
+            optimizer.zero_grad()   # clear gradients for next train
+            loss_all.backward()         # backpropagation, compute gradients
+            optimizer.step()        # apply gradients
+            batch_idx+=1
+            continue
 
 
             multi_mask = att_multi_speech
@@ -429,7 +437,6 @@ def main():
             SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output/', 2))
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
 
-            batch_idx+=1
 
 
 if __name__ == "__main__":
