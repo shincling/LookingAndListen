@@ -378,8 +378,8 @@ def main():
             top_k_num=train_data['top_k'] #对于这个batch的top-k
             print 'top-k this batch:',top_k_num
 
-            mix_speech=Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
-            mix_speech=torch.transpose(mix_speech,1,3)
+            mix_speech_orignial=Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
+            mix_speech=torch.transpose(mix_speech_orignial,1,3)
             mix_speech=torch.transpose(mix_speech,2,3)
             # (2L, 301L, 257L, 2L) >>> (2L, 2L, 301L, 257L)
             print 'mix_speech_shape:',mix_speech.size()
@@ -391,8 +391,27 @@ def main():
             y_map=convert2numpy(train_data['multi_spk_fea_list'],top_k_num) #最终的map
             print 'final map shape:',y_map.shape
             predict_multi_masks=model(mix_speech,images_query)
-            print 'predict results shape:',predict_multi_masks.size()
-            1/0
+            print 'predict results shape:',predict_multi_masks.size() #(2L, 3L, 301L, 257L, 2L)
+
+            mix_speech_multi=mix_speech_orignial.view(config.BATCH_SIZE,1,speech_fre,mix_speech_len,2)\
+                .expand(config.BATCH_SIZE,top_k_num,speech_fre,mix_speech_len,2)
+            # (2L, 301L, 257L, 2L) >> (2L, topk,301L, 257L, 2L)
+
+            predict_multi_masks_real=predict_multi_masks[:,:,:,:,0]
+            predict_multi_masks_fake=predict_multi_masks[:,:,:,:,1]
+            mix_speech_real=mix_speech_multi[:,:,:,:,0]
+            mix_speech_fake=mix_speech_multi[:,:,:,:,1]
+            y_map_real=y_map[:,:,:,:,0]
+            y_map_fake=y_map[:,:,:,:,1]
+
+            predict_real=predict_multi_masks_real*mix_speech_real-predict_multi_masks_fake*mix_speech_fake
+            predict_fake=predict_multi_masks_real*mix_speech_fake+predict_multi_masks_fake*mix_speech_real
+            print 'predict real/fake size:',predict_real.size()
+
+            # loss_real=loss_func()
+
+
+
 
             multi_mask = att_multi_speech
             # top_k_mask_mixspeech_multi=top_k_mask_mixspeech.view(config.BATCH_SIZE,top_k_num,1,1).expand(config.BATCH_SIZE,top_k_num,mix_speech_len,speech_fre)
