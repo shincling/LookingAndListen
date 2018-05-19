@@ -168,7 +168,7 @@ class ATTENTION(nn.Module):
         self.fc_layers1=nn.Linear(2*config.HIDDEN_UNITS,config.FC_UNITS)
         self.fc_layers2=nn.Linear(config.FC_UNITS,config.FC_UNITS)
         self.fc_layers3=nn.Linear(config.FC_UNITS,config.FC_UNITS)
-        self.final_layer=nn.Linear(config.FC_UNITS,speech_fre*2)
+        self.final_layer=nn.Linear(config.FC_UNITS,257*2)
 
     def forward(self, mix_hidden, query):
         # todo:这个要弄好，其实也可以直接抛弃memory来进行attention | DONE
@@ -194,7 +194,8 @@ class ATTENTION(nn.Module):
         multi_moda=F.relu(self.fc_layers3(multi_moda))
 
         print 'The size of last embedding:',multi_moda.size() #应该是(bs*topk),301,600
-        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[1],self.fre,2)
+        results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[1],257,2)
+        print 'The size of output:',results.size() #应该是(bs*topk),301,600
         results=F.sigmoid(results)
         return results
 
@@ -237,7 +238,7 @@ class FACE_EMB(nn.Module):
             cnn_layer=eval('self.cnn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
             # x=F.batch_norm(x,0,1)
-            print 'Face shape after CNNs:',idx,'', x.size()
+            # print 'Face shape after CNNs:',idx,'', x.size()
 
         #　到这里是(bs*topk, 256L, 75L, 1L)
         x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
@@ -275,7 +276,7 @@ class MIX_SPEECH(nn.Module):
             cnn_layer=eval('self.cnn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
             # x=F.batch_norm(x,0,1)
-            print 'speech shape after CNNs:',idx,'', x.size()
+            # print 'speech shape after CNNs:',idx,'', x.size()
         return x
 
 
@@ -321,6 +322,7 @@ def main():
     spk_global_gen = prepare_data(mode='global', train_or_test='train')
     global_para = spk_global_gen.next()
     print global_para
+    #TODO:exchange speech_fea and mix_speech_len~!
     spk_all_list, dict_spk2idx, dict_idx2spk,speech_fre, mix_speech_len,\
     total_frames, spk_num_total, batch_total = global_para
     del spk_global_gen
