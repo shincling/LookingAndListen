@@ -315,6 +315,12 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         extract_frames(aim_spk_video_path,dst) #抽取frames从第一个目标人的视频里,在本目录下生成一个临时的文件夹
                         aim_video_imagename_list = sorted(os.listdir(dst)) #得到这个文件夹里的所有图像的名字
                         aim_video_image_list=[]#用来存放这些抽出来帧的images的列表，后面转化为array
+
+                        if len(aim_video_imagename_list)>config.MAX_LEN_VIDEO:
+                            aim_video_imagename_list=aim_video_imagename_list[:config.MAX_LEN_VIDEO]
+                        if len(aim_video_imagename_list)<config.MAX_LEN_VIDEO:#视频短了，用最后一张补齐。
+                            aim_video_imagename_list.extend([aim_video_imagename_list[-1] for jj in range(config.MAX_LEN_VIDEO-len(aim_video_imagename_list))])
+
                         for img in aim_video_imagename_list:
                             im=Image.open(sample_name+'/'+img)
                             pix=im.load()
