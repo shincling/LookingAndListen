@@ -42,7 +42,7 @@ def interpolate(var,size,axis=1):
     # var=cc
     shape=var.size()
     assert len(shape)==2
-    out_var=Variable(torch.zeros(shape[0],size),requires_grad=0)
+    out_var=Variable(torch.zeros(shape[0],size),requires_grad=0).cuda()
     for i in range(size):
         out_var[:,i]=var[:,i*shape[1]/size]
     return out_var.view(shape[0],size)
@@ -359,7 +359,7 @@ def main():
         model.load_state_dict(torch.load(params_path))
         print 'Params:',params_path, 'loaded successfully~!\n'
 
-    loss_func = torch.nn.MSELoss()  # the target label is NOT an one-hotted
+    loss_func = torch.nn.MSELoss().cuda()  # the target label is NOT an one-hotted
     loss_multi_func = torch.nn.MSELoss()  # the target label is NOT an one-hotted
 
     print '''Begin to calculate.'''
