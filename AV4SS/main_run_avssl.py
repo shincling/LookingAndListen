@@ -227,6 +227,12 @@ class FACE_EMB(nn.Module):
         self.cnn5=nn.Conv2d(256,256,(5,1),stride=1,padding=(16,0),dilation=(8,1))
         self.cnn6=nn.Conv2d(256,256,(5,1),stride=1,padding=(32,0),dilation=(16,1))
         self.num_cnns=6
+        self.bn1=nn.BatchNorm2d(256)
+        self.bn2=nn.BatchNorm2d(256)
+        self.bn3=nn.BatchNorm2d(256)
+        self.bn4=nn.BatchNorm2d(256)
+        self.bn5=nn.BatchNorm2d(256)
+        self.bn6=nn.BatchNorm2d(256)
 
     def forward(self, x):
         print '\n Face layer log:'
@@ -236,9 +242,10 @@ class FACE_EMB(nn.Module):
         x = x.view(-1,x.size(2),x.size(3),1)
         for idx in range(self.num_cnns):
             cnn_layer=eval('self.cnn{}'.format(idx+1))
+            bn_layer=eval('self.bn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
-            # x=F.batch_norm(x,0,1)
-            # print 'Face shape after CNNs:',idx,'', x.size()
+            x=bn_layer(x)
+            print 'Face shape after CNNs:',idx,'', x.size()
 
         #　到这里是(bs*topk, 256L, 75L, 1L)
         x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
@@ -268,15 +275,31 @@ class MIX_SPEECH(nn.Module):
         self.cnn14=nn.Conv2d(96,96,(5,5),stride=1,padding=(64,64),dilation=(32,32))
         self.cnn15=nn.Conv2d(96,8,(1,1),stride=1,padding=(0,0),dilation=(1,1))
         self.num_cnns=15
+        self.bn1=nn.BatchNorm2d(96)
+        self.bn2=nn.BatchNorm2d(96)
+        self.bn3=nn.BatchNorm2d(96)
+        self.bn4=nn.BatchNorm2d(96)
+        self.bn5=nn.BatchNorm2d(96)
+        self.bn6=nn.BatchNorm2d(96)
+        self.bn7=nn.BatchNorm2d(96)
+        self.bn8=nn.BatchNorm2d(96)
+        self.bn9=nn.BatchNorm2d(96)
+        self.bn10=nn.BatchNorm2d(96)
+        self.bn11=nn.BatchNorm2d(96)
+        self.bn12=nn.BatchNorm2d(96)
+        self.bn13=nn.BatchNorm2d(96)
+        self.bn14=nn.BatchNorm2d(96)
+        self.bn15=nn.BatchNorm2d(8)
 
     def forward(self, x):
         print '\nSpeech layer log:'
         x = x.contiguous()
         for idx in range(self.num_cnns):
             cnn_layer=eval('self.cnn{}'.format(idx+1))
+            bn_layer=eval('self.bn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
-            # x=F.batch_norm(x,0,1)
-            # print 'speech shape after CNNs:',idx,'', x.size()
+            x=bn_layer(x)
+            print 'speech shape after CNNs:',idx,'', x.size()
         return x
 
 
