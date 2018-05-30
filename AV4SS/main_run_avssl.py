@@ -25,6 +25,7 @@ import scipy.interpolate as inter
 # import bss_test
 
 
+global_id=random.random()
 torch.cuda.set_device(0)
 config.EPOCH_SIZE = 300
 np.random.seed(1)  # 设定种子
@@ -49,7 +50,7 @@ def interpolate(var,size,axis=1):
 
 def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk, data, sort_idx):
     if config.Out_Sep_Result:
-        dst = 'batch_output'
+        dst = 'batch_output'+str(global_id)+''
         if os.path.exists(dst):
             print " cleanup: " + dst + "/"
             shutil.rmtree(dst)
@@ -74,9 +75,9 @@ def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk,
             min_len = len(wav_pre)
             if test_all_outputchannel:
                 min_len = len(wav_pre)
-            sf.write('batch_output/{}_testspk{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
+            sf.write('batch_output'+str(global_id)+'/{}_testspk{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
                      config.FRAME_RATE, )
-        sf.write('batch_output/{}_True_mix.wav'.format(sample_idx), data['mix_wav'][sample_idx][:min_len],
+        sf.write('batch_output'+str(global_id)+'/{}_True_mix.wav'.format(sample_idx), data['mix_wav'][sample_idx][:min_len],
                  config.FRAME_RATE, )
         sample_idx += 1
 
@@ -85,7 +86,7 @@ def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk,
             this_spk = each_spk
             wav_genTrue = each_sample[this_spk]
             min_len = 39936
-            sf.write('batch_output/{}_{}_realTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+            sf.write('batch_output'+str(global_id)+'/{}_{}_realTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
                      config.FRAME_RATE, )
 
     for sample_idx, each_sample in enumerate(data['multi_spk_fea_list']):
@@ -97,14 +98,14 @@ def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk,
             _genture_spec = y_true_map * np.exp(1j * phase_mix)
             wav_genTrue = librosa.core.spectrum.istft(np.transpose(_genture_spec), config.FRAME_SHIFT, )
             min_len = len(wav_pre)
-            sf.write('batch_output/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+            sf.write('batch_output'+str(global_id)+'/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
                      config.FRAME_RATE, )
 
 
 def bss_eval(predict_multi_map, y_multi_map, y_map_gtruth, dict_idx2spk, train_data):
     # 评测和结果输出部分
     if config.Out_Sep_Result:
-        dst = 'batch_output'
+        dst = 'batch_output'+str(global_id)+''
         if os.path.exists(dst):
             print " \ncleanup: " + dst + "/"
             shutil.rmtree(dst)
@@ -128,11 +129,11 @@ def bss_eval(predict_multi_map, y_multi_map, y_map_gtruth, dict_idx2spk, train_d
                 min_len = np.min((len(train_data['multi_spk_wav_list'][sample_idx][this_spk]), len(wav_pre)))
                 if test_all_outputchannel:
                     min_len = len(wav_pre)
-                sf.write('batch_output/{}_{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
+                sf.write('batch_output'+str(global_id)+'/{}_{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
                          config.FRAME_RATE, )
-                sf.write('batch_output/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+                sf.write('batch_output'+str(global_id)+'/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
                          config.FRAME_RATE, )
-        sf.write('batch_output/{}_True_mix.wav'.format(sample_idx), train_data['mix_wav'][sample_idx][:min_len],
+        sf.write('batch_output'+str(global_id)+'/{}_True_mix.wav'.format(sample_idx), train_data['mix_wav'][sample_idx][:min_len],
                  config.FRAME_RATE, )
         sample_idx += 1
 
@@ -457,7 +458,7 @@ def main():
 
             bss_eval_fromGenMap(multi_mask, x_input_map, top_k_mask_mixspeech, dict_idx2spk, train_data,
                                 top_k_sort_index)
-            SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output/', 2))
+            SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output'+str(global_id)+'/', 2))
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
 
 
