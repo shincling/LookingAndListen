@@ -377,7 +377,8 @@ def main():
     print model.state_dict().keys()
 
     init_lr=0.0008
-    optimizer = torch.optim.Adam([{'params':model.parameters()}], lr=init_lr)
+    optimizer = torch.optim.Adam([{'params':model.parameters()},
+                                  {'params':face_layer.parameters()}], lr=init_lr)
     if 0 and config.Load_param:
         params_path='sss'
         model.load_state_dict(torch.load(params_path))
@@ -462,6 +463,7 @@ def main():
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
             if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
                 torch.save(model.state_dict(),'params/modelparams_{}_{}'.format(global_id,epoch_idx))
+                torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
 
 
