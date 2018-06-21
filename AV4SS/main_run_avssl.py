@@ -237,7 +237,7 @@ class FACE_EMB(nn.Module):
 
     def forward(self, x):
         print '\n Face layer log:'
-        #　这个时候的输入应该是　bs*top-k*1024个通道*75帧×１
+        #　这个时候的输入应该是　bs,top-k,1024个通道,75帧,１
         shape=x.size()
         x = x.contiguous()
         x = x.view(-1,x.size(2),x.size(3),1)
@@ -346,7 +346,7 @@ def main():
     spk_global_gen = prepare_data(mode='global', train_or_test='train')
     global_para = spk_global_gen.next()
     print global_para
-    #TODO:exchange speech_fea and mix_speech_len~!
+    #TODO:exchange speech_fea and mix_speech_len~! 没改之前　fre是３０１，len是２５７
     spk_all_list, dict_spk2idx, dict_idx2spk,speech_fre, mix_speech_len,\
     total_frames, spk_num_total, batch_total = global_para
     del spk_global_gen
