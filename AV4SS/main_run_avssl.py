@@ -416,7 +416,7 @@ def main():
             y_map=convert2numpy(train_data['multi_spk_fea_list'],top_k_num) #最终的map
             print 'final map shape:',y_map.shape
             predict_multi_masks=model(mix_speech,images_query)
-            print 'predict results shape:',predict_multi_masks.size() #(2L, 3L, 301L, 257L, 2L)
+            print 'predict results shape:',predict_multi_masks.size() #(2L, topk, 301L, 257L, 2L)
 
             mix_speech_multi=mix_speech_orignial.view(config.BATCH_SIZE,1,speech_fre,mix_speech_len,2)\
                 .expand(config.BATCH_SIZE,top_k_num,speech_fre,mix_speech_len,2)
@@ -464,8 +464,6 @@ def main():
             if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
                 torch.save(model.state_dict(),'params/modelparams_{}_{}'.format(global_id,epoch_idx))
                 torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
-
-
 
 if __name__ == "__main__":
     main()
