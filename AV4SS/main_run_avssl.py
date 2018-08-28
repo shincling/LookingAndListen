@@ -15,6 +15,7 @@ import os
 import shutil
 import librosa
 import soundfile as sf
+import myNet
 
 import scipy.interpolate as inter
 
@@ -205,14 +206,17 @@ class FACE_HIDDEN(nn.Module):
     def __init__(self):
         super(FACE_HIDDEN, self).__init__()
         self.layer=nn.Linear(3*299*299,1024)
+        self.image_net=myNet.inception_v3(pretrained=True)
+
     def forward(self, x):
         # x是bs,topk,75,3,299,299的
         topk=x.size()[1]
+        x=x.view(-1,3,299,299)
         x=x.contiguous()
-        x=x.view(config.BATCH_SIZE,topk,75,-1)
-        x=self.layer(x) # bs,topk,75,1024
-        # x=x.view(config.BATCH_SIZE,topk,75,1024)
-        x=torch.transpose(x,2,3).contiguous().view(config.BATCH_SIZE,topk,1024,75,1)
+        x=self.image_net(x)[2] # bs,topk,75,2048
+        print 'shape after image_net',x.size()
+        x=x.view(config.BATCH_SIZE,topk,75,2048)
+        x=torch.transpose(x,2,3).contiguous().view(config.BATCH_SIZE,topk,2048,75,1)
 
         return x
 
@@ -221,7 +225,8 @@ class FACE_EMB(nn.Module):
     def __init__(self,fre=301):
         self.fre=fre
         super(FACE_EMB, self).__init__()
-        self.cnn1=nn.Conv2d(1024,256,(7,1),stride=1,padding=(3,0),dilation=(1,1))
+        # self.cnn1=nn.Conv2d(1024,256,(7,1),stride=1,padding=(3,0),dilation=(1,1))
+        self.cnn1=nn.Conv2d(2048,256,(7,1),stride=1,padding=(3,0),dilation=(1,1))
         self.cnn2=nn.Conv2d(256,256,(5,1),stride=1,padding=(2,0),dilation=(1,1))
         self.cnn3=nn.Conv2d(256,256,(5,1),stride=1,padding=(4,0),dilation=(2,1))
         self.cnn4=nn.Conv2d(256,256,(5,1),stride=1,padding=(8,0),dilation=(4,1))
