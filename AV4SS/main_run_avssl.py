@@ -398,13 +398,15 @@ def main():
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx - 1, SDR_SUM.mean())
         SDR_SUM = np.array([])
         batch_idx=0
+        train_data_gen = prepare_data('once', 'train')
+        # train_data_gen=prepare_data('once','test')
+        # train_data_gen=prepare_data('once','eval_test')
         # for batch_idx in range(config.EPOCH_SIZE):
         while True:
             print '*' * 40, epoch_idx, batch_idx, '*' * 40
-            train_data_gen = prepare_data('once', 'train')
-            # train_data_gen=prepare_data('once','test')
-            # train_data_gen=prepare_data('once','eval_test')
             train_data = train_data_gen.next()
+            if train_data==False:
+                break #如果这个epoch的生成器没有数据了，直接进入下一个epoch
             top_k_num=train_data['top_k'] #对于这个batch的top-k
             print 'top-k this batch:',top_k_num
 
