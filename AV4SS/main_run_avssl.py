@@ -468,9 +468,9 @@ def main():
                                 top_k_sort_index)
             SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output'+str(global_id)+'/', 2))
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
-            if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
-                torch.save(model.state_dict(),'params/modelparams_{}_{}'.format(global_id,epoch_idx))
-                torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
+        if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
+            torch.save(model.state_dict(),'params/modelparams_{}_{}'.format(global_id,epoch_idx))
+            # torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
 if __name__ == "__main__":
     main()
