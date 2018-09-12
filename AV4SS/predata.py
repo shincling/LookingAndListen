@@ -11,7 +11,8 @@ import resampy
 import librosa
 import shutil
 import subprocess
-import Image
+# import Image
+from PIL import Image
 
 channel_first=config.channel_first
 np.random.seed(1)#设定种子
