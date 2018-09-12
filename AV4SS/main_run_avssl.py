@@ -26,6 +26,7 @@ import scipy.interpolate as inter
 # import bss_test
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 global_id=random.random()
 torch.cuda.set_device(0)
 config.EPOCH_SIZE = 300
