@@ -104,6 +104,44 @@ def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk,
             sf.write('batch_output'+str(global_id)+'/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
                      config.FRAME_RATE, )
 
+def bss_eval_cRM(predict_map_real,predict_map_fake,y_multi_map,y_map_gtruth,dict_idx2spk,train_data):
+    #评测和结果输出部分
+    if config.Out_Sep_Result:
+        dst='batch_output'
+        if os.path.exists(dst):
+            print " \ncleanup: " + dst + "/"
+            shutil.rmtree(dst)
+        os.makedirs(dst)
+
+    for sample_idx,each_sample in enumerate(train_data['multi_spk_wav_list']):
+        for each_spk in each_sample.keys():
+            this_spk=each_spk
+            wav_genTrue=each_sample[this_spk]
+            min_len = 39936
+            sf.write('batch_output/{}_{}_realTrue.wav'.format(sample_idx,this_spk),wav_genTrue[:min_len],config.FRAME_RATE,)
+
+    # 对于每个sample
+    sample_idx=0 #代表一个batch里的依次第几个
+    for each_y,each_pre_real,each_pre_fake,each_trueVector,spk_name in zip(y_multi_map,predict_map_real,predict_map_fake,y_map_gtruth,train_data['aim_spkname']):
+        _mix_spec=train_data['mix_phase'][sample_idx]
+        phase_mix = np.angle(_mix_spec)
+        for idx,one_cha in enumerate(each_trueVector):
+            if one_cha: #　如果此刻这个候选人通道是开启的
+                this_spk=dict_idx2spk[one_cha]
+                y_true_map=each_y[idx].data.cpu().numpy()
+                y_pre_map_real=each_pre_real[idx].data.cpu().numpy()
+                y_pre_map_fake=each_pre_fake[idx].data.cpu().numpy()
+                _pred_spec = y_pre_map_real + (1j * y_pre_map_fake)
+                _genture_spec = y_true_map[:,:,0] + (1j * y_true_map[:,:,1])
+                wav_pre=librosa.core.spectrum.istft(np.transpose(_pred_spec), config.FRAME_SHIFT)
+                wav_genTrue=librosa.core.spectrum.istft(np.transpose(_genture_spec), config.FRAME_SHIFT,)
+                min_len = np.min((len(train_data['multi_spk_wav_list'][sample_idx][this_spk]), len(wav_pre)))
+                if test_all_outputchannel:
+                    min_len =  len(wav_pre)
+                sf.write('batch_output/{}_{}_pre.wav'.format(sample_idx,this_spk),wav_pre[:min_len],config.FRAME_RATE,)
+                sf.write('batch_output/{}_{}_genTrue.wav'.format(sample_idx,this_spk),wav_genTrue[:min_len],config.FRAME_RATE,)
+        sf.write('batch_output/{}_True_mix.wav'.format(sample_idx),train_data['mix_wav'][sample_idx][:min_len],config.FRAME_RATE,)
+        sample_idx+=1
 
 def bss_eval(predict_multi_map, y_multi_map, y_map_gtruth, dict_idx2spk, train_data):
     # 评测和结果输出部分
@@ -206,7 +244,7 @@ class ATTENTION(nn.Module):
 class FACE_HIDDEN_simple(nn.Module):
     #这个是定制的那个预训练的抽脸部特征的1024的图像层次，后面替换，目前先随便用了一层全链接
     def __init__(self):
-        super(FACE_HIDDEN, self).__init__()
+        super(FACE_HIDDEN_simple, self).__init__()
         self.layer=nn.Linear(3*299*299,1024)
     def forward(self, x):
         # x是bs,topk,75,3,299,299的
@@ -470,7 +508,7 @@ def main():
             batch_idx+=1
             continue
 
-
+            '''
             multi_mask = att_multi_speech
             # top_k_mask_mixspeech_multi=top_k_mask_mixspeech.view(config.BATCH_SIZE,top_k_num,1,1).expand(config.BATCH_SIZE,top_k_num,mix_speech_len,speech_fre)
             # multi_mask=multi_mask*Variable(top_k_mask_mixspeech_multi).cuda()
@@ -486,9 +524,13 @@ def main():
                                 top_k_sort_index)
             SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output'+str(global_id)+'/', 2))
             print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
+            '''
         if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
             torch.save(model.state_dict(),'params/modelparams_{}_{}'.format(global_id,epoch_idx))
             # torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
+        if 1 and epoch_idx % 3 == 0:
+            eval_bss(mix_hidden_layer_3d,adjust_layer, mix_speech_classifier, mix_speech_multiEmbedding, att_speech_layer,
+                     loss_multi_func, dict_spk2idx, dict_idx2spk, num_labels, mix_speech_len, speech_fre)
 if __name__ == "__main__":
     main()
