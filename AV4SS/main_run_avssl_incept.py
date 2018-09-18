@@ -25,11 +25,10 @@ import scipy.interpolate as inter
 # from separation import bss_eval_sources
 # import bss_test
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 global_id=random.random()
-torch.cuda.set_device(0)
 config.EPOCH_SIZE = 300
 np.random.seed(1)  # 设定种子
 torch.manual_seed(1)
@@ -206,7 +205,7 @@ class ATTENTION(nn.Module):
 class FACE_HIDDEN_simple(nn.Module):
     #这个是定制的那个预训练的抽脸部特征的1024的图像层次，后面替换，目前先随便用了一层全链接
     def __init__(self):
-        super(FACE_HIDDEN, self).__init__()
+        super(FACE_HIDDEN_simple, self).__init__()
         self.layer=nn.Linear(3*299*299,1024)
     def forward(self, x):
         # x是bs,topk,75,3,299,299的
