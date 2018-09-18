@@ -62,7 +62,7 @@ def prepare_datasize(gen):
 
 def create_mix_list(train_or_test,mix_k,data_path,all_spk,Num_samples_per_batch):
     list_path=data_path+'/list_mixtures/'
-    file_name=open(list_path+'mix_{}_spk_{}.txt'.format(mix_k,train_or_test),'w')
+    file_name=open(list_path+'faceemb_mix_{}_spk_{}.txt'.format(mix_k,train_or_test),'w')
 
     for i_line in range(Num_samples_per_batch):
         aim_spk_k=random.sample(all_spk,mix_k)#本次混合的候选人
@@ -118,8 +118,11 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 all_spk_type=all_spk_eval
             elif train_or_test=='test':
                 all_spk_type=all_spk_test
-
             all_spk = set(all_spk_train+all_spk_eval+all_spk_test).union()
+
+            all_spk = os.listdir((data_path+'/face_emb/s2-s25/'))
+            all_spk = [spk.replace('_imanpy','') for spk in all_spk]
+
             batch_idx=0
             list_path=data_path+'/list_mixtures/'
             all_samples_list={}
@@ -131,20 +134,21 @@ def prepare_data(mode,train_or_test,min=None,max=None):
             for mix_k in mix_number_list:
                 aim_list_path=None
                 if config.TRAIN_LIST and train_or_test=='train':
-                    aim_list_path=list_path+'mix_{}_spk_train.txt'.format(mix_k)
+                    aim_list_path=list_path+'faceemb_mix_{}_spk_train.txt'.format(mix_k)
                 if config.VALID_LIST and train_or_test=='valid':
-                    aim_list_path=list_path+'mix_{}_spk_valid.txt'.format(mix_k)
+                    aim_list_path=list_path+'faceemb_mix_{}_spk_valid.txt'.format(mix_k)
                 if config.TEST_LIST and train_or_test=='test':
-                    aim_list_path=list_path+'mix_{}_spk_test.txt'.format(mix_k)
+                    aim_list_path=list_path+'faceemb_mix_{}_spk_test.txt'.format(mix_k)
                 if not aim_list_path: #如果没有List就随机创建一个
                     create_mix_list(train_or_test,mix_k,data_path,all_spk_type,config.Num_samples_per_epoch)
                     if  train_or_test=='train':
-                        aim_list_path=list_path+'mix_{}_spk_train.txt'.format(mix_k)
+                        aim_list_path=list_path+'faceemb_mix_{}_spk_train.txt'.format(mix_k)
                     if  train_or_test=='valid':
-                        aim_list_path=list_path+'mix_{}_spk_valid.txt'.format(mix_k)
+                        aim_list_path=list_path+'faceemb_mix_{}_spk_valid.txt'.format(mix_k)
                     if train_or_test=='test':
-                        aim_list_path=list_path+'mix_{}_spk_test.txt'.format(mix_k)
-                    # continue
+                        aim_list_path=list_path+'faceemb_mix_{}_spk_test.txt'.format(mix_k)
+                    continue
+                1/0
                 all_samples_list[mix_k]=open(aim_list_path).readlines()#[:31]
                 number_samples[mix_k]=len(all_samples_list[mix_k])
                 batch_mix[mix_k]=len(all_samples_list[mix_k])/config.BATCH_SIZE
