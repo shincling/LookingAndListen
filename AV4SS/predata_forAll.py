@@ -15,8 +15,8 @@ import subprocess
 from PIL import Image
 
 channel_first=config.channel_first
-np.random.seed(1)#设定种子
-random.seed(1)
+# np.random.seed(1)#设定种子
+# random.seed(1)
 
 def extract_frames(video, dst):
     with open('video_log', "w") as ffmpeg_log:
@@ -68,8 +68,9 @@ def create_mix_list(train_or_test,mix_k,data_path,all_spk,Num_samples_per_batch)
         aim_spk_k=random.sample(all_spk,mix_k)#本次混合的候选人
         line=''
         for spk in aim_spk_k:
-            sample_name=random.sample(os.listdir('{}/{}/{}/{}_speech'.format(data_path,train_or_test,spk,spk)),1)[0]
-            line+='GRID/data/{}/{}/{} 0.000 '.format(train_or_test,spk,sample_name)
+            sample_name=random.sample(os.listdir('{}/face_emb/s2-s35/{}_imgnpy/'.format(data_path,spk)),1)[0]
+            sample_name=sample_name.replace('npy','wav')
+            line+='GRID/data/face_emb/voice/{}/{} 0.000 '.format(spk,sample_name)
         line+='\n'
         file_name.write(line)
 
@@ -103,6 +104,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
     multi_spk_fea_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
     multi_spk_wav_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
     multi_video_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
+    multi_video_fea_list=[] #应该是bs个dict，每个dict里是说话人name为key，clean_fea为value的字典
 
     #目标数据集的总data，底下应该存放分目录的文件夹，每个文件夹应该名字是sX
     data_path=config.aim_path+'/data'
@@ -120,8 +122,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 all_spk_type=all_spk_test
             all_spk = set(all_spk_train+all_spk_eval+all_spk_test).union()
 
-            all_spk = os.listdir((data_path+'/face_emb/s2-s25/'))
-            all_spk = [spk.replace('_imanpy','') for spk in all_spk]
+            all_spk = os.listdir((data_path+'/face_emb/s2-s35/'))
+            all_spk = [spk.replace('_imgnpy','') for spk in all_spk]
 
             batch_idx=0
             list_path=data_path+'/list_mixtures/'
@@ -140,15 +142,14 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 if config.TEST_LIST and train_or_test=='test':
                     aim_list_path=list_path+'faceemb_mix_{}_spk_test.txt'.format(mix_k)
                 if not aim_list_path: #如果没有List就随机创建一个
-                    create_mix_list(train_or_test,mix_k,data_path,all_spk_type,config.Num_samples_per_epoch)
+                    create_mix_list(train_or_test,mix_k,data_path,all_spk,config.Num_samples_per_epoch)
                     if  train_or_test=='train':
                         aim_list_path=list_path+'faceemb_mix_{}_spk_train.txt'.format(mix_k)
                     if  train_or_test=='valid':
                         aim_list_path=list_path+'faceemb_mix_{}_spk_valid.txt'.format(mix_k)
                     if train_or_test=='test':
                         aim_list_path=list_path+'faceemb_mix_{}_spk_test.txt'.format(mix_k)
-                    continue
-                1/0
+
                 all_samples_list[mix_k]=open(aim_list_path).readlines()#[:31]
                 number_samples[mix_k]=len(all_samples_list[mix_k])
                 batch_mix[mix_k]=len(all_samples_list[mix_k])/config.BATCH_SIZE
@@ -197,6 +198,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     multi_spk_fea_list=[]
                     multi_spk_wav_list=[]
                     multi_video_list=[]
+                    multi_video_fea_list=[]
                     continue
 
                 all_over=1 #用来判断所有的是不是都结束了
@@ -227,15 +229,18 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 multi_fea_dict_this_sample={}
                 multi_wav_dict_this_sample={}
                 multi_video_dict_this_sample={}
+                multi_video_fea_dict_this_sample={}
                 multi_db_dict_this_sample={}
 
                 for k,spk in enumerate(aim_spk_k):
                     #选择dB的通道～！
                     sample_name=aim_spk_samplename_k[k]
-                    if train_or_test!='test':
-                        spk_speech_path=data_path+'/'+'train'+'/'+spk+'/'+spk+'_speech/'+sample_name+'.wav'
-                    else:
-                        spk_speech_path=data_path+'/'+'eval_test'+'/'+spk+'/'+spk+'_speech/'+sample_name+'.wav'
+                    # if train_or_test!='test':
+                    #     spk_speech_path=data_path+'/'+'train'+'/'+spk+'/'+spk+'_speech/'+sample_name+'.wav'
+                    # else:
+                    #     spk_speech_path=data_path+'/'+'eval_test'+'/'+spk+'/'+spk+'_speech/'+sample_name+'.wav'
+
+                    spk_speech_path=data_path+'/'+'face_emb/voice'+'/'+spk+'/'+sample_name+'.wav'
 
                     signal, rate = sf.read(spk_speech_path)  # signal 是采样值，rate 是采样频率
                     if len(signal.shape) > 1:
@@ -281,6 +286,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         multi_wav_dict_this_sample[spk]=signal
 
                         #视频处理部分，为了得到query
+                        '''
                         aim_spk_video_path=data_path+'/'+train_or_test+'/'+spk+'/'+spk+'_video/'+sample_name+'.mpg'
                         sample_name='video_output/'+sample_name
                         extract_frames(aim_spk_video_path,sample_name) #抽取frames从第一个目标人的视频里,在本目录下生成一个临时的文件夹
@@ -309,8 +315,11 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                         im_array[:,x,y]=pix[x,y]
                             aim_video_image_list.append(im_array)
                         multi_video_dict_this_sample[spk]=aim_video_image_list
-
+                        multi_video_fea_dict_this_sample[spk]=aim_video_image_list
                         shutil.rmtree(sample_name)#删除临时文件夹
+                        '''
+                        aim_spk_fea_video_path=data_path+'/face_emb/s2-s35/'+spk+'_imgnpy/'+sample_name+'.npy'
+                        multi_video_fea_dict_this_sample[spk]=np.load(aim_spk_fea_video_path)
 
                     else:
                         ratio=10**(aim_spk_db_k[k]/20.0)
@@ -325,6 +334,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
 
 
                         #视频处理部分，为了得到query
+                        '''
                         aim_spk_video_path=data_path+'/'+train_or_test+'/'+spk+'/'+spk+'_video/'+sample_name+'.mpg'
                         dst='video_output/'+sample_name
                         sample_name=dst
@@ -354,12 +364,17 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                         im_array[:,x,y]=pix[x,y]
                             aim_video_image_list.append(im_array)
                         multi_video_dict_this_sample[spk]=aim_video_image_list
-
                         shutil.rmtree(sample_name)#删除临时文件夹
+                        '''
+
+                        aim_spk_fea_video_path=data_path+'/face_emb/s2-s35/'+spk+'_imgnpy/'+sample_name+'.npy'
+                        multi_video_fea_dict_this_sample[spk]=np.load(aim_spk_fea_video_path)
+
 
                 multi_spk_fea_list.append(multi_fea_dict_this_sample) #把这个sample的dict传进去
                 multi_spk_wav_list.append(multi_wav_dict_this_sample) #把这个sample的dict传进去
                 multi_video_list.append(multi_video_dict_this_sample) #把这个sample的dict传进去
+                multi_video_fea_list.append(multi_video_fea_dict_this_sample) #把这个sample的dict传进去
 
                 # 这里采用log 以后可以考虑采用MFCC或GFCC特征做为输入
                 if config.IS_LOG_SPECTRAL:
@@ -411,6 +426,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                                'multi_spk_fea_list':multi_spk_fea_list,
                                'multi_spk_wav_list':multi_spk_wav_list,
                                'multi_video_list':multi_video_list,
+                               'multi_video_fea_list':multi_video_fea_list,
                                'batch_total':batch_total,
                                'top_k':mix_k
                                }
@@ -428,6 +444,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     multi_spk_fea_list=[]
                     multi_spk_wav_list=[]
                     multi_video_list=[]
+                    multi_video_fea_list=[]
                 sample_idx[mix_k]+=1
 
         else:
@@ -447,7 +464,3 @@ def prepare_data(mode,train_or_test,min=None,max=None):
 
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
-
-# ge=prepare_data('global','train')
-# cc=ge.next()
-# print cc
