@@ -150,7 +150,7 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                     if train_or_test=='test':
                         aim_list_path=list_path+'faceemb_mix_{}_spk_test.txt'.format(mix_k)
 
-                all_samples_list[mix_k]=open(aim_list_path).readlines()#[:31]
+                all_samples_list[mix_k]=open(aim_list_path).readlines()#[:10]
                 number_samples[mix_k]=len(all_samples_list[mix_k])
                 batch_mix[mix_k]=len(all_samples_list[mix_k])/config.BATCH_SIZE
                 number_samples_all+=len(all_samples_list[mix_k])

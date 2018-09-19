@@ -25,7 +25,7 @@ import scipy.interpolate as inter
 # from separation import bss_eval_sources
 # import bss_test
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 global_id=random.random()
@@ -307,7 +307,7 @@ class FACE_EMB(nn.Module):
             bn_layer=eval('self.bn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
             x=bn_layer(x)
-            print 'Face shape after CNNs:',idx,'', x.size()
+            # print 'Face shape after CNNs:',idx,'', x.size()
 
         #　到这里是(bs*topk, 256L, 75L, 1L)
         x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
@@ -361,7 +361,7 @@ class MIX_SPEECH(nn.Module):
             bn_layer=eval('self.bn{}'.format(idx+1))
             x=F.relu(cnn_layer(x))
             x=bn_layer(x)
-            print 'speech shape after CNNs:',idx,'', x.size()
+            # print 'speech shape after CNNs:',idx,'', x.size()
         return x
 
 
@@ -434,7 +434,7 @@ def main():
     print model
     print model.state_dict().keys()
 
-    init_lr=0.0008
+    init_lr=0.0005
     optimizer = torch.optim.Adam([{'params':model.parameters()},
                                   ], lr=init_lr)
     if 0 and config.Load_param:
@@ -490,8 +490,8 @@ def main():
             predict_fake=predict_multi_masks_real*mix_speech_fake+predict_multi_masks_fake*mix_speech_real
             print 'predict real/fake size:',predict_real.size()
 
-            loss_real=loss_func(predict_real,y_map_real)
-            loss_fake=loss_func(predict_fake,y_map_fake)
+            loss_real=loss_func(predict_real,y_map_real)/top_k_num
+            loss_fake=loss_func(predict_fake,y_map_fake)/top_k_num
             loss_all=loss_real+loss_fake
             print 'loss:',loss_real.data[0],loss_fake.data[0]
 
@@ -500,30 +500,12 @@ def main():
             loss_all.backward()         # backpropagation, compute gradients
             optimizer.step()        # apply gradients
             batch_idx+=1
-            continue
 
-            '''
-            multi_mask = att_multi_speech
-            # top_k_mask_mixspeech_multi=top_k_mask_mixspeech.view(config.BATCH_SIZE,top_k_num,1,1).expand(config.BATCH_SIZE,top_k_num,mix_speech_len,speech_fre)
-            # multi_mask=multi_mask*Variable(top_k_mask_mixspeech_multi).cuda()
-
-            x_input_map = Variable(torch.from_numpy(train_data['mix_feas'])).cuda()
-            # print x_input_map.size()
-            x_input_map_multi = x_input_map.view(config.BATCH_SIZE, 1, mix_speech_len, speech_fre).expand(
-                config.BATCH_SIZE, top_k_num, mix_speech_len, speech_fre)
-            # predict_multi_map=multi_mask*x_input_map_multi
-            predict_multi_map = multi_mask * x_input_map_multi
-
-            bss_eval_fromGenMap(multi_mask, x_input_map, top_k_mask_mixspeech, dict_idx2spk, train_data,
-                                top_k_sort_index)
-            SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output'+str(global_id)+'/', 2))
-            print 'SDR_SUM (len:{}) for epoch {} : {}'.format(SDR_SUM.shape, epoch_idx, SDR_SUM.mean())
-            '''
         if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
-            torch.save(model.state_dict(),'params/modelparams_{}_{}'.format(global_id,epoch_idx))
+            torch.save(model.state_dict(),'params/V1modelparams_{}_{}'.format(global_id,epoch_idx))
             # torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
-        if 1 and epoch_idx % 3 == 0:
+        if 0 and epoch_idx % 3 == 0:
             eval_bss(mix_hidden_layer_3d,adjust_layer, mix_speech_classifier, mix_speech_multiEmbedding, att_speech_layer,
                      loss_multi_func, dict_spk2idx, dict_idx2spk, num_labels, mix_speech_len, speech_fre)
 if __name__ == "__main__":
