@@ -464,3 +464,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
 
     else:
         raise ValueError('No such Model:{}'.format(config.MODE))
+
+# cc=prepare_data('once','train')
+# cc.next()
+# print cc
+# time.sleep(10)
