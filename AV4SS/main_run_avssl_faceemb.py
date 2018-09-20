@@ -237,7 +237,7 @@ class ATTENTION(nn.Module):
         print 'The size of last embedding:',multi_moda.size() #应该是(bs*topk),301,600
         results=self.final_layer(multi_moda).view(BATCH_SIZE,top_k,mix_shape[1],257,2)
         print 'The size of output:',results.size() #应该是(bs*topk),301,600
-        results=F.sigmoid(results)
+        results=F.tanh(results)
         return results
 
 class FACE_HIDDEN_simple(nn.Module):
@@ -294,10 +294,12 @@ class FACE_EMB(nn.Module):
         self.bn4=nn.BatchNorm2d(256)
         self.bn5=nn.BatchNorm2d(256)
         self.bn6=nn.BatchNorm2d(256)
+        self.inter=nn.Upsample(size=(300))
 
     def forward(self, x):
         print '\n Face layer log:'
         #　这个时候的输入应该是　bs,top-k,1024个通道,75帧,１
+
         x=x.transpose(2,3)
         shape=x.size()
         x = x.contiguous()
@@ -310,7 +312,11 @@ class FACE_EMB(nn.Module):
             # print 'Face shape after CNNs:',idx,'', x.size()
 
         #　到这里是(bs*topk, 256L, 75L, 1L)
-        x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
+        x=self.inter(x.view(config.BATCH_SIZE*2,256,75))
+        print x.size()
+        x=torch.cat((x, torch.unsqueeze(x[:, :, -1], 2)), 2)
+
+        # x=interpolate(x.view(-1,config.MAX_LEN_VIDEO),size=self.fre,axis=1)# 给进去一个二维，最后一个维度是要插值的
         #　到这里插值过后是（bs*topk*256,fre)
         x=torch.transpose(x.view(config.BATCH_SIZE,shape[1],256,self.fre),2,3).contiguous().cuda()
         return x.view(config.BATCH_SIZE,shape[1],self.fre,256)
@@ -490,8 +496,8 @@ def main():
             predict_fake=predict_multi_masks_real*mix_speech_fake+predict_multi_masks_fake*mix_speech_real
             print 'predict real/fake size:',predict_real.size()
 
-            loss_real=loss_func(predict_real,y_map_real)/top_k_num
-            loss_fake=loss_func(predict_fake,y_map_fake)/top_k_num
+            loss_real=loss_func(predict_real,y_map_real)#/top_k_num
+            loss_fake=loss_func(predict_fake,y_map_fake)#/top_k_num
             loss_all=loss_real+loss_fake
             print 'loss:',loss_real.data[0],loss_fake.data[0]
 
@@ -501,7 +507,7 @@ def main():
             optimizer.step()        # apply gradients
             batch_idx+=1
 
-        if 1 and epoch_idx >= 10 and epoch_idx % 5 == 0:
+        if 1 and epoch_idx >= 0 and epoch_idx % 5 == 0:
             torch.save(model.state_dict(),'params/V1modelparams_{}_{}'.format(global_id,epoch_idx))
             # torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
