@@ -8,7 +8,7 @@ import numpy as np
 import random
 import time
 import config as config
-from predata_forAll import prepare_data
+from predata_forAll_db import prepare_data
 import myNet
 # from test_multi_labels_speech import multi_label_vector
 import os
