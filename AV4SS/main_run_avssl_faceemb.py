@@ -81,6 +81,9 @@ def bss_eval_cRM(predict_map_real,predict_map_fake,y_multi_map,train_data):
                 y_pre_map_fake=each_pre_fake[idx].data.cpu().numpy()
                 _pred_spec = y_pre_map_real + (1j * y_pre_map_fake)
                 _genture_spec = y_true_map[:,:,0] + (1j * y_true_map[:,:,1])
+                if config.IS_POWER:
+                    _genture_spec = pow(_genture_spec,10/3.0)
+                    _pred_spec = pow(_pred_spec,10/3.0)
 
                 # some_fea_clean = np.transpose((librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
                 #                                                           config.WIN_LEN)))
@@ -403,7 +406,7 @@ def eval_bss(model, loss_multi_func,mix_speech_len,speech_fre):
         loss_fake=loss_multi_func(predict_fake,y_map_fake)#/top_k_num
         loss_all=loss_real+loss_fake
         print 'loss:',loss_real.data[0],loss_fake.data[0]
-        bss_eval_cRM(predict_multi_masks_real,predict_multi_masks_fake,y_map,eval_data)
+        bss_eval_cRM(predict_real,predict_fake,y_map,eval_data)
 
         SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output23234/', 2))
         print 'SDR_aver_now:',SDR_SUM.mean()
@@ -450,7 +453,9 @@ def main():
     optimizer = torch.optim.Adam([{'params':model.parameters()},
                                   ], lr=init_lr)
     if 1 and config.Load_param:
-        params_path='params/V1modelparams_0.552758362826_230'
+        params_path='params/V1modelparams_0.552758362826_270'
+        params_path='params/V1modelparams_dB_270'
+        # params_path='params/V1modelparams_db_pow_135'
         model.load_state_dict(torch.load(params_path))
         print 'Params:',params_path, 'loaded successfully~!\n'
 
@@ -467,7 +472,7 @@ def main():
         # train_data_gen=prepare_data('once','test')
         # train_data_gen=prepare_data('once','eval_test')
         # for batch_idx in range(config.EPOCH_SIZE):
-        while True:
+        while 0:
             print '*' * 40, epoch_idx, batch_idx, '*' * 40
             train_data = train_data_gen.next()
             if train_data==False:
@@ -517,7 +522,7 @@ def main():
             torch.save(model.state_dict(),'params/V1modelparams_{}_{}'.format(global_id,epoch_idx))
             # torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
-        if 0 and epoch_idx % 3 == 0:
+        if 1 and epoch_idx % 3 == 0:
             eval_bss(model,loss_multi_func, mix_speech_len, speech_fre)
 if __name__ == "__main__":
     main()
