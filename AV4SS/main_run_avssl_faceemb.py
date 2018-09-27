@@ -22,13 +22,12 @@ import scipy.interpolate as inter
 
 # import matlab
 # import matlab.engine
-# from separation import bss_eval_sources
-# import bss_test
+import bss_test
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 
-global_id=random.random()
+global_id='db_pow'
 config.EPOCH_SIZE = 300
 np.random.seed(1)  # 设定种子
 torch.manual_seed(1)
@@ -50,63 +49,12 @@ def interpolate(var,size,axis=1):
         out_var[:,i]=var[:,i*shape[1]/size]
     return out_var.view(shape[0],size)
 
-def bss_eval_fromGenMap(multi_mask, x_input, top_k_mask_mixspeech, dict_idx2spk, data, sort_idx):
-    if config.Out_Sep_Result:
-        dst = 'batch_output'+str(global_id)+''
-        if os.path.exists(dst):
-            print " cleanup: " + dst + "/"
-            shutil.rmtree(dst)
-        os.makedirs(dst)
 
-    sample_idx = 0
-    for each_pre, mask, s_idx in zip(multi_mask, top_k_mask_mixspeech, sort_idx):
-        _mix_spec = data['mix_phase'][sample_idx]
-        xxx = x_input[sample_idx].data.cpu().numpy()
-        phase_mix = np.angle(_mix_spec)
-        for idx, each_spk in enumerate(each_pre):
-            this_spk = idx
-            y_pre_map = each_pre[idx].data.cpu().numpy()
-            # 如果第二个通道概率比较大
-            # if idx==0 and s_idx[0].data.cpu().numpy()>s_idx[1].data.cpu().numpy():
-            #      y_pre_map=1-each_pre[1].data.cpu().numpy()
-            # if idx==1 and s_idx[0].data.cpu().numpy()<s_idx[1].data.cpu().numpy():
-            #      y_pre_map=1-each_pre[0].data.cpu().numpy()
-            y_pre_map = y_pre_map * xxx
-            _pred_spec = y_pre_map * np.exp(1j * phase_mix)
-            wav_pre = librosa.core.spectrum.istft(np.transpose(_pred_spec), config.FRAME_SHIFT)
-            min_len = len(wav_pre)
-            if test_all_outputchannel:
-                min_len = len(wav_pre)
-            sf.write('batch_output'+str(global_id)+'/{}_testspk{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
-                     config.FRAME_RATE, )
-        sf.write('batch_output'+str(global_id)+'/{}_True_mix.wav'.format(sample_idx), data['mix_wav'][sample_idx][:min_len],
-                 config.FRAME_RATE, )
-        sample_idx += 1
-
-    for sample_idx, each_sample in enumerate(data['multi_spk_wav_list']):
-        for each_spk in each_sample.keys():
-            this_spk = each_spk
-            wav_genTrue = each_sample[this_spk]
-            min_len = 39936
-            sf.write('batch_output'+str(global_id)+'/{}_{}_realTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
-                     config.FRAME_RATE, )
-
-    for sample_idx, each_sample in enumerate(data['multi_spk_fea_list']):
-        _mix_spec = data['mix_phase'][sample_idx]
-        phase_mix = np.angle(_mix_spec)
-        for each_spk in each_sample.keys():
-            this_spk = each_spk
-            y_true_map = each_sample[this_spk]
-            _genture_spec = y_true_map * np.exp(1j * phase_mix)
-            wav_genTrue = librosa.core.spectrum.istft(np.transpose(_genture_spec), config.FRAME_SHIFT, )
-            min_len = len(wav_pre)
-            sf.write('batch_output'+str(global_id)+'/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
-                     config.FRAME_RATE, )
-
-def bss_eval_cRM(predict_map_real,predict_map_fake,y_multi_map,y_map_gtruth,dict_idx2spk,train_data):
+def bss_eval_cRM(predict_map_real,predict_map_fake,y_multi_map,train_data):
     #评测和结果输出部分
+    y_map_gtruth=train_data['multi_spk_fea_list']
     if config.Out_Sep_Result:
-        dst='batch_output'
+        dst='batch_output23234'
         if os.path.exists(dst):
             print " \ncleanup: " + dst + "/"
             shutil.rmtree(dst)
@@ -116,36 +64,41 @@ def bss_eval_cRM(predict_map_real,predict_map_fake,y_multi_map,y_map_gtruth,dict
         for each_spk in each_sample.keys():
             this_spk=each_spk
             wav_genTrue=each_sample[this_spk]
-            min_len = 39936
-            sf.write('batch_output/{}_{}_realTrue.wav'.format(sample_idx,this_spk),wav_genTrue[:min_len],config.FRAME_RATE,)
+            min_len = len(wav_genTrue)
+            sf.write('batch_output23234/{}_{}_realTrue.wav'.format(sample_idx,this_spk),wav_genTrue[:min_len],config.FRAME_RATE,)
 
     # 对于每个sample
     sample_idx=0 #代表一个batch里的依次第几个
-    for each_y,each_pre_real,each_pre_fake,each_trueVector,spk_name in zip(y_multi_map,predict_map_real,predict_map_fake,y_map_gtruth,train_data['aim_spkname']):
+    for each_y,each_pre_real,each_pre_fake,each_spks,spk_name in zip(y_multi_map,predict_map_real,predict_map_fake,y_map_gtruth,train_data['aim_spkname']):
         _mix_spec=train_data['mix_phase'][sample_idx]
         phase_mix = np.angle(_mix_spec)
-        for idx,one_cha in enumerate(each_trueVector):
+        each_spks=each_spks.keys()
+        for idx,one_cha in enumerate(each_spks):
             if one_cha: #　如果此刻这个候选人通道是开启的
-                this_spk=dict_idx2spk[one_cha]
-                y_true_map=each_y[idx].data.cpu().numpy()
+                this_spk=one_cha
+                y_true_map=each_y[idx]
                 y_pre_map_real=each_pre_real[idx].data.cpu().numpy()
                 y_pre_map_fake=each_pre_fake[idx].data.cpu().numpy()
                 _pred_spec = y_pre_map_real + (1j * y_pre_map_fake)
                 _genture_spec = y_true_map[:,:,0] + (1j * y_true_map[:,:,1])
-                wav_pre=librosa.core.spectrum.istft(np.transpose(_pred_spec), config.FRAME_SHIFT)
-                wav_genTrue=librosa.core.spectrum.istft(np.transpose(_genture_spec), config.FRAME_SHIFT,)
+
+                # some_fea_clean = np.transpose((librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
+                #                                                           config.WIN_LEN)))
+
+                wav_pre=librosa.core.spectrum.istft(np.transpose(_pred_spec), config.HOP_LEN, config.WIN_LEN)
+                wav_genTrue=librosa.core.spectrum.istft(np.transpose(_genture_spec), config.HOP_LEN, config.WIN_LEN)
                 min_len = np.min((len(train_data['multi_spk_wav_list'][sample_idx][this_spk]), len(wav_pre)))
                 if test_all_outputchannel:
                     min_len =  len(wav_pre)
-                sf.write('batch_output/{}_{}_pre.wav'.format(sample_idx,this_spk),wav_pre[:min_len],config.FRAME_RATE,)
-                sf.write('batch_output/{}_{}_genTrue.wav'.format(sample_idx,this_spk),wav_genTrue[:min_len],config.FRAME_RATE,)
-        sf.write('batch_output/{}_True_mix.wav'.format(sample_idx),train_data['mix_wav'][sample_idx][:min_len],config.FRAME_RATE,)
+                sf.write('batch_output23234/{}_{}_pre.wav'.format(sample_idx,this_spk),wav_pre[:min_len],config.FRAME_RATE,)
+                sf.write('batch_output23234/{}_{}_genTrue.wav'.format(sample_idx,this_spk),wav_genTrue[:min_len],config.FRAME_RATE,)
+        sf.write('batch_output23234/{}_True_mix.wav'.format(sample_idx),train_data['mix_wav'][sample_idx][:min_len],config.FRAME_RATE,)
         sample_idx+=1
 
 def bss_eval(predict_multi_map, y_multi_map, y_map_gtruth, dict_idx2spk, train_data):
     # 评测和结果输出部分
     if config.Out_Sep_Result:
-        dst = 'batch_output'+str(global_id)+''
+        dst = 'batch_output23234'+str(global_id)+''
         if os.path.exists(dst):
             print " \ncleanup: " + dst + "/"
             shutil.rmtree(dst)
@@ -169,11 +122,11 @@ def bss_eval(predict_multi_map, y_multi_map, y_map_gtruth, dict_idx2spk, train_d
                 min_len = np.min((len(train_data['multi_spk_wav_list'][sample_idx][this_spk]), len(wav_pre)))
                 if test_all_outputchannel:
                     min_len = len(wav_pre)
-                sf.write('batch_output'+str(global_id)+'/{}_{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
+                sf.write('batch_output23234'+str(global_id)+'/{}_{}_pre.wav'.format(sample_idx, this_spk), wav_pre[:min_len],
                          config.FRAME_RATE, )
-                sf.write('batch_output'+str(global_id)+'/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
+                sf.write('batch_output23234'+str(global_id)+'/{}_{}_genTrue.wav'.format(sample_idx, this_spk), wav_genTrue[:min_len],
                          config.FRAME_RATE, )
-        sf.write('batch_output'+str(global_id)+'/{}_True_mix.wav'.format(sample_idx), train_data['mix_wav'][sample_idx][:min_len],
+        sf.write('batch_output23234'+str(global_id)+'/{}_True_mix.wav'.format(sample_idx), train_data['mix_wav'][sample_idx][:min_len],
                  config.FRAME_RATE, )
         sample_idx += 1
 
@@ -405,6 +358,59 @@ def top_k_mask(batch_pro, alpha, top_k):
             final[line_idx, i] = 1
     return final, sort_index
 
+def eval_bss(model, loss_multi_func,mix_speech_len,speech_fre):
+    model.training=False
+    print '#' * 40
+    eval_data_gen=prepare_data('once','valid')
+    SDR_SUM=np.array([])
+    while True:
+        print '\n\n'
+        eval_data=eval_data_gen.next()
+        if eval_data==False:
+            break #如果这个epoch的生成器没有数据了，直接进入下一个epoch
+
+        top_k_num=eval_data['top_k'] #对于这个batch的top-k
+        print 'top-k this batch:',top_k_num
+
+        mix_speech_orignial=Variable(torch.from_numpy(eval_data['mix_feas'])).cuda()
+        mix_speech=torch.transpose(mix_speech_orignial,1,3)
+        mix_speech=torch.transpose(mix_speech,2,3)
+        # (2L, 301L, 257L, 2L) >>> (2L, 2L, 301L, 257L)
+        print 'mix_speech_shape:',mix_speech.size()
+
+        images_query=Variable(torch.from_numpy(convert2numpy(eval_data['multi_video_fea_list'],top_k_num))).cuda() #大小bs,topk,75,3,299,299
+        y_map=convert2numpy(eval_data['multi_spk_fea_list'],top_k_num) #最终的map
+        print 'final map shape:',y_map.shape
+        predict_multi_masks=model(mix_speech,images_query)
+        print 'predict results shape:',predict_multi_masks.size() #(2L, topk, 301L, 257L, 2L)
+
+        mix_speech_multi=mix_speech_orignial.view(config.BATCH_SIZE,1,speech_fre,mix_speech_len,2) \
+            .expand(config.BATCH_SIZE,top_k_num,speech_fre,mix_speech_len,2)
+        # (2L, 301L, 257L, 2L) >> (2L, topk,301L, 257L, 2L)
+
+        predict_multi_masks_real=predict_multi_masks[:,:,:,:,0]
+        predict_multi_masks_fake=predict_multi_masks[:,:,:,:,1]
+        mix_speech_real=mix_speech_multi[:,:,:,:,0]
+        mix_speech_fake=mix_speech_multi[:,:,:,:,1]
+        y_map_real=Variable(torch.from_numpy(y_map[:,:,:,:,0])).cuda()
+        y_map_fake=Variable(torch.from_numpy(y_map[:,:,:,:,1])).cuda()
+
+        predict_real=predict_multi_masks_real*mix_speech_real-predict_multi_masks_fake*mix_speech_fake
+        predict_fake=predict_multi_masks_real*mix_speech_fake+predict_multi_masks_fake*mix_speech_real
+        print 'predict real/fake size:',predict_real.size()
+
+        loss_real=loss_multi_func(predict_real,y_map_real)#/top_k_num
+        loss_fake=loss_multi_func(predict_fake,y_map_fake)#/top_k_num
+        loss_all=loss_real+loss_fake
+        print 'loss:',loss_real.data[0],loss_fake.data[0]
+        bss_eval_cRM(predict_multi_masks_real,predict_multi_masks_fake,y_map,eval_data)
+
+        SDR_SUM = np.append(SDR_SUM, bss_test.cal('batch_output23234/', 2))
+        print 'SDR_aver_now:',SDR_SUM.mean()
+
+    SDR_aver=SDR_SUM.mean()
+    print 'SDR_SUM (len:{}) for epoch eval : {}'.format(SDR_SUM.shape,SDR_aver)
+    print '#'*40
 
 def main():
     print('go to model')
@@ -443,8 +449,8 @@ def main():
     init_lr=0.0005
     optimizer = torch.optim.Adam([{'params':model.parameters()},
                                   ], lr=init_lr)
-    if 0 and config.Load_param:
-        params_path='sss'
+    if 1 and config.Load_param:
+        params_path='params/V1modelparams_0.552758362826_230'
         model.load_state_dict(torch.load(params_path))
         print 'Params:',params_path, 'loaded successfully~!\n'
 
@@ -507,12 +513,11 @@ def main():
             optimizer.step()        # apply gradients
             batch_idx+=1
 
-        if 1 and epoch_idx >= 0 and epoch_idx % 5 == 0:
+        if 1 and epoch_idx >= 5 and epoch_idx % 5 == 0:
             torch.save(model.state_dict(),'params/V1modelparams_{}_{}'.format(global_id,epoch_idx))
             # torch.save(face_layer.state_dict(),'params/faceparams_{}_{}'.format(global_id,epoch_idx))
 
         if 0 and epoch_idx % 3 == 0:
-            eval_bss(mix_hidden_layer_3d,adjust_layer, mix_speech_classifier, mix_speech_multiEmbedding, att_speech_layer,
-                     loss_multi_func, dict_spk2idx, dict_idx2spk, num_labels, mix_speech_len, speech_fre)
+            eval_bss(model,loss_multi_func, mix_speech_len, speech_fre)
 if __name__ == "__main__":
     main()

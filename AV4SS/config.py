@@ -160,6 +160,7 @@ UNK_SPK_SUPP = 3
 START_EALY_STOP = 0
 # 特征Spectral of Log Spectral
 IS_LOG_SPECTRAL = False
+IS_POWER = True
 # DB_THRESHOLD = 40  # None
 # 添加背景噪音（Str）
 ADD_BGD_NOISE = False

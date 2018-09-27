@@ -283,6 +283,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         # print signal.shape
                         aim_fea_clean = np.transpose((librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
                                                                                     config.WIN_LEN)))
+                        if config.IS_POWER:
+                            aim_fea_clean=pow(aim_fea_clean,0.3)
                         aim_fea_clean=convert2(aim_fea_clean)
                         # print aim_fea_clean.shape
                         #TODO:这个实现出来跟原文不太一样啊，是２５７×３０１（原文是２９８）
@@ -334,6 +336,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                         #　这个说话人的语音
                         some_fea_clean = np.transpose((librosa.core.spectrum.stft(signal, config.FFT_SIZE, config.HOP_LEN,
                                                                                        config.WIN_LEN)))
+                        if config.IS_POWER:
+                            some_fea_clean=pow(some_fea_clean,0.3)
                         some_fea_clean=convert2(some_fea_clean)
                         multi_fea_dict_this_sample[spk]=some_fea_clean
                         multi_wav_dict_this_sample[spk]=signal
@@ -391,6 +395,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 else:
                     feature_mix = np.transpose((librosa.core.spectrum.stft(wav_mix, config.FFT_SIZE, config.HOP_LEN,
                                                                                     config.WIN_LEN,)))
+                    if config.IS_POWER:
+                        feature_mix=pow(feature_mix,0.3)
                     feature_mix=convert2(feature_mix)
 
                 mix_speechs[batch_idx,:]=wav_mix
@@ -399,6 +405,8 @@ def prepare_data(mode,train_or_test,min=None,max=None):
                 #                                                                      config.FRAME_SHIFT,)))
                 mix_phase.append(np.transpose(librosa.core.spectrum.stft(wav_mix, config.FFT_SIZE, config.HOP_LEN,
                                                                          config.WIN_LEN,)))
+                if config.IS_POWER:
+                    mix_phase[-1]=pow(mix_phase[-1],0.3)
                 batch_idx+=1
                 # print 'batch_dix:{}/{},'.format(batch_idx,config.BATCH_SIZE),
                 if batch_idx==config.BATCH_SIZE: #填满了一个batch
